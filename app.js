@@ -7,6 +7,10 @@
   const clone = o => JSON.parse(JSON.stringify(o));
   const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const PUNITS = Object.keys(C.UNITS);
+  // Hãng phổ biến cho thiết bị áp suất / nhiệt độ, xếp theo mức độ phổ biến (sổ chọn nhanh)
+  const MAKERS = ["Rosemount", "Yokogawa", "Endress+Hauser", "ABB", "Siemens", "Honeywell", "WIKA", "Foxboro", "Fuji Electric", "Azbil",
+    "Krohne", "VEGA", "Ashcroft", "SOR", "Druck", "United Electric Controls", "Barksdale", "Danfoss", "Dwyer", "Nagano Keiki"];
+  const OTHER = "__other";
 
   /* ---------- storage (never throws) ---------- */
   const store = {
@@ -26,7 +30,7 @@
     return {
       id: "r" + Date.now().toString(36), type, certNo: "", certAuto: true, ptAuto: true,
       h: {
-        location: "GPP", tag: "", description: type === "PT" ? "Pressure Transmitter" : "Pressure Switch", model: "", serial: "", maker: "",
+        location: "GPP", locMode: "list", locFree: "", custFree: "", makerSel: "", tag: "", description: type === "PT" ? "Pressure Transmitter" : "Pressure Switch", model: "", serial: "", maker: "",
         min: "", max: "", unit: type === "PT" ? "psi" : "psi", acc: type === "PT" ? 0.25 : 1, calDate: todayISO(), issueDate: todayISO(),
         procedure: st.procedure, env: st.env, stand1: "", stand2: type === "PT" ? (stands.find(s => s.kind === "e") || {}).id || "" : "",
         pset: "", unitPset: "kPa", psType: "As Found", micro: "NC", dirQTG: "Rising", resolution: 0, note: ""
@@ -42,6 +46,12 @@
   const num = v => (v === "" || v == null) ? NaN : Number(String(v).replace(",", "."));
   const standById = id => stands.find(s => s.id === id);
   function locInfo(code) { const l = SEED.locations.find(x => x[0] === code) || [code, code, "", "", ""]; return { code: l[0], locVN: l[1], locEN: l[2], custVN: l[3], custEN: l[4] }; }
+  function recLoc() {
+    const h = rec.h;
+    if (h.locMode === "free") return { code: "", locVN: h.locFree || "", locEN: "", custVN: h.custFree || "", custEN: "" };
+    return locInfo(h.location);
+  }
+  function makerSel(h) { return h.makerSel || (MAKERS.includes(h.maker) ? h.maker : (h.maker ? OTHER : "")); }
   function yy() { const d = D.toDate(rec.h.calDate) || new Date(); return String(d.getFullYear()).slice(2); }
   function autoCertNo() {
     const pre = `${settings[rec.type].prefix}.${yy()}.`;
@@ -59,14 +69,14 @@
     const s1 = standById(h.stand1), s2 = standById(h.stand2);
     if (!h.tag) out.errors.push("Chưa nhập Tag");
     if (!s1) out.errors.push("Chưa chọn chuẩn áp suất (Stand1)");
-    if (s1 && isExpired(s1, h.calDate)) out.warns.push(`Chuẩn ${s1.key} (S/N ${s1.serial}) hết hạn ${s1.due} – trước ngày hiệu chuẩn`);
+    if (settings.warnExpired && s1 && isExpired(s1, h.calDate)) out.warns.push(`Chuẩn ${s1.key} (S/N ${s1.serial}) hết hạn ${s1.due} – trước ngày hiệu chuẩn`);
     if (s1 && !isFinite(C.factor(s1.unit, rec.type === "PT" ? h.unit : h.unitPset))) out.errors.push(`Không đổi được đơn vị ${s1.unit} → ${rec.type === "PT" ? h.unit : h.unitPset}`);
     if (!rec.sig.inspector) out.warns.push("Chưa nhập Kiểm định viên");
     if (!rec.sig.controller) out.warns.push("Chưa nhập Người kiểm soát");
     try {
       if (rec.type === "PT") {
         if (!s2) out.errors.push("Chưa chọn chuẩn điện (Stand2)");
-        if (s2 && isExpired(s2, h.calDate)) out.warns.push(`Chuẩn ${s2.key} hết hạn ${s2.due} – trước ngày hiệu chuẩn`);
+        if (settings.warnExpired && s2 && isExpired(s2, h.calDate)) out.warns.push(`Chuẩn ${s2.key} hết hạn ${s2.due} – trước ngày hiệu chuẩn`);
         const mn = num(h.min), mx = num(h.max), acc = num(h.acc);
         if (!(mx > mn)) out.errors.push("Phạm vi đo chưa hợp lệ (Max > Min)");
         if (!(acc > 0)) out.errors.push("Chưa nhập độ chính xác %FS");
@@ -101,28 +111,34 @@
     let ctl;
     if (opt.options) ctl = `<select id="${id}" data-p="${path}">${opt.options.map(o => { const [val, txt] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(val)}"${String(val) === String(v) ? " selected" : ""}>${esc(txt)}</option>`; }).join("")}</select>`;
     else ctl = `<input id="${id}" data-p="${path}" value="${esc(v)}" ${opt.type ? `type="${opt.type}"` : ""} ${opt.num ? 'inputmode="decimal"' : ""} ${opt.list ? `list="${opt.list}"` : ""} placeholder="${esc(opt.ph || "")}" autocomplete="off">`;
+    if (opt.sign) ctl = `<div class="pm">${ctl}<button type="button" class="pmb" data-neg="${path}" aria-label="Đổi dấu">±</button></div>`;
     return `<label class="f${opt.wide ? " wide" : ""}"><span>${label}</span>${ctl}</label>`;
   }
   function standOptions(kind) {
-    return [["", "— chọn —"]].concat(stands.filter(s => s.kind === kind).map(s => [s.id, `${s.key} · S/N ${s.serial}${isExpired(s, rec.h.calDate) ? " · HẾT HẠN" : ""}`]));
+    return [["", "— chọn —"]].concat(stands.filter(s => s.kind === kind).map(s => [s.id, `${s.key} · S/N ${s.serial}`]));
   }
   function renderEntry() {
     const h = rec.h, PT = rec.type === "PT";
+    h.makerSel = makerSel(h);
     const types = TYPES.map(([k, t, d]) => `<button class="chip${rec.type === k ? " on" : ""}" data-type="${k}" ${["PT", "PS"].includes(k) ? "" : "disabled"}><b>${t}</b><small>${["PT", "PS"].includes(k) ? d : "sắp có"}</small></button>`).join("");
     const locOpts = SEED.locations.map(l => [l[0], `${l[0]} – ${l[1]}`]);
     const descOpts = PT ? ["Pressure Transmitter", "Differential Pressure Transmitter"] : ["Pressure Switch", "Differential Pressure Switch"];
     const dev = `
       <div class="grid">
+        <div class="f wide"><span>Địa điểm</span><div class="seg"><button data-loc="list" class="${h.locMode !== "free" ? "on" : ""}">Công trình khí (chọn sẵn)</button><button data-loc="free" class="${h.locMode === "free" ? "on" : ""}">Địa điểm 2 (gõ tay)</button></div></div>
+        ${h.locMode === "free"
+          ? fld("Địa điểm 2 – nơi lắp đặt", "h.locFree", { wide: 1, ph: "Theo gói thầu, VD: Giàn …" }) + fld("Cơ sở sử dụng (Customer)", "h.custFree", { wide: 1, ph: "Tên đơn vị sử dụng in trên chứng chỉ" })
+          : fld("Địa điểm công trình khí", "h.location", { options: locOpts, wide: 1 })}
         ${fld("Số chứng chỉ", "certNo", { ph: autoCertNo() })}
-        ${fld("Địa điểm (Location)", "h.location", { options: locOpts })}
         ${fld("Tag", "h.tag", { ph: PT ? "PT-1430A" : "PDSH-1106" })}
         ${fld("Mô tả (Description)", "h.description", { options: descOpts })}
         ${fld("Kiểu / Model", "h.model")}
         ${fld("Số serial", "h.serial")}
-        ${fld("Hãng sản xuất", "h.maker")}
+        ${fld("Hãng sản xuất", "h.makerSel", { options: [["", "— chọn hãng —"], [OTHER, "KHÁC (nhập tay)"]].concat(MAKERS) })}
+        ${makerSel(h) === OTHER ? fld("Hãng (nhập tay)", "h.maker") : ""}
         ${fld(PT ? "Độ chính xác (±%FS)" : "Độ chính xác (±% Pset)", "h.acc", { num: 1 })}
-        ${fld(PT ? "Phạm vi đo – Min" : "Dải làm việc – Min", "h.min", { num: 1 })}
-        ${fld(PT ? "Phạm vi đo – Max" : "Dải làm việc – Max", "h.max", { num: 1 })}
+        ${fld(PT ? "Phạm vi đo – Min" : "Dải làm việc – Min", "h.min", { num: 1, sign: 1 })}
+        ${fld(PT ? "Phạm vi đo – Max" : "Dải làm việc – Max", "h.max", { num: 1, sign: 1 })}
         ${fld("Đơn vị phạm vi", "h.unit", { options: PUNITS })}
         ${PT ? "" : fld("Pset (giá trị đặt)", "h.pset", { num: 1 }) + fld("Đơn vị Pset", "h.unitPset", { options: PUNITS }) +
         fld("Loại (Type)", "h.psType", { options: ["As Found", "As Left"] }) + fld("Microswitch", "h.micro", { options: ["NC", "NO"] }) +
@@ -140,12 +156,12 @@
     if (PT) {
       const rows = rec.pt.points.map((x, i) => {
         const ideal = (num(h.max) > num(h.min) && isFinite(num(x))) ? (4 + 16 * (num(x) - num(h.min)) / (num(h.max) - num(h.min))).toFixed(3) : "";
-        return `<tr><td class="n">${i + 1}</td><td><input data-p="pt.points.${i}" inputmode="decimal" value="${esc(x)}"></td><td class="mut">${ideal}</td>
+        return `<tr><td class="n">${i + 1}</td><td><div class="pm"><input data-p="pt.points.${i}" inputmode="decimal" value="${esc(x)}"><button type="button" class="pmb sm" data-neg="pt.points.${i}" aria-label="Đổi dấu">±</button></div></td><td class="mut">${ideal}</td>
           <td><input data-p="pt.rise.${i}" inputmode="decimal" value="${esc(rec.pt.rise[i])}" placeholder="mA"></td>
           <td><input data-p="pt.fall.${i}" inputmode="decimal" value="${esc(rec.pt.fall[i])}" placeholder="mA"></td></tr>`;
       }).join("");
       pts = `<table class="entry"><thead><tr><th>#</th><th>AS chuẩn<br>${esc(h.unit)}</th><th>mA lý tưởng</th><th>Tăng ↑<br>mA</th><th>Giảm ↓<br>mA</th></tr></thead><tbody>${rows}</tbody></table>
-        <div class="btns"><button class="btn" data-act="pts">Điểm 0-25-50-75-100%</button><button class="btn pri" data-act="copyRF">Giảm = Tăng ⇩</button><button class="btn" data-act="copyFR">Tăng = Giảm</button></div>`;
+        <div class="btns"><button class="btn" data-act="pts">Điểm 0-25-50-75-100%</button><button class="btn pri" data-act="sync">⇅ Đồng bộ Tăng / Giảm</button></div>`;
     } else {
       const rows = rec.ps.high.map((v, i) => `<tr><td class="n">${i + 1}</td><td><input data-p="ps.high.${i}" inputmode="decimal" value="${esc(v)}"></td><td><input data-p="ps.low.${i}" inputmode="decimal" value="${esc(rec.ps.low[i])}"></td></tr>`).join("");
       pts = `<table class="entry"><thead><tr><th>Lần</th><th>P.High – tăng áp ↑<br>${esc(h.unitPset)}</th><th>P.Low – giảm áp ↓<br>${esc(h.unitPset)}</th></tr></thead><tbody>${rows}</tbody></table>
@@ -205,6 +221,7 @@
     const p = e.target.dataset.p; if (!p) return;
     setPath(rec, p, e.target.value);
     if (p === "certNo") rec.certAuto = false;
+    if (p === "h.makerSel") { rec.h.maker = e.target.value === OTHER ? "" : e.target.value; renderEntry(); if (e.target.value === OTHER) focusPath("h.maker"); persistCurrent(); return; }
     if (p.startsWith("pt.points")) rec.ptAuto = false;
     if (rec.type === "PT" && (p === "h.min" || p === "h.max") && rec.ptAuto) { genPoints(); renderEntry(); focusPath(p); }
     else if (p === "h.unit" || p === "h.unitPset" || p === "h.description" || p === "h.calDate") {
@@ -223,24 +240,39 @@
     const mn = num(rec.h.min), mx = num(rec.h.max); if (!(mx > mn)) return;
     rec.pt.points = [0, 1, 2, 3, 4].map(k => String(C.xround((mx - mn) / 4 * k + mn, 6)));  // QTG!D23 = (G23-C23)/4*k + C23
   }
+  // Một nút đồng bộ: điền ô trống từ chiều còn lại; nếu không có ô trống thì gán Giảm = Tăng.
+  function syncRF() {
+    const R = rec.pt.rise, F = rec.pt.fall; let filled = 0;
+    for (let i = 0; i < R.length; i++) {
+      const r = String(R[i]).trim(), f = String(F[i]).trim();
+      if (r && !f) { F[i] = r; filled++; } else if (f && !r) { R[i] = f; filled++; }
+    }
+    if (!filled) { rec.pt.fall = R.slice(); toast("Đã đồng bộ: Giảm = Tăng"); } else toast(`Đã điền ${filled} ô từ chiều còn lại`);
+    renderEntry();
+  }
   let persistT;
   function persistCurrent() { clearTimeout(persistT); persistT = setTimeout(() => store.set("current", rec), 300); }
 
   function onClick(e) {
     const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.loc) { rec.h.locMode = b.dataset.loc; renderEntry(); persistCurrent(); return; }
+    if (b.dataset.neg) {
+      const inp = $(`[data-p="${b.dataset.neg}"]`); let v = String(inp.value || "").trim();
+      v = v.startsWith("-") ? v.slice(1) : "-" + v; inp.value = v === "-" ? "-" : v;
+      onInput({ target: inp }); const n = $(`[data-p="${b.dataset.neg}"]`); if (n) n.focus(); return;
+    }
     if (b.dataset.type) {
       if (b.dataset.type === rec.type) return;
-      const keep = { location: rec.h.location, calDate: rec.h.calDate, issueDate: rec.h.issueDate };
+      const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree, calDate: rec.h.calDate, issueDate: rec.h.issueDate };
       const sig = rec.sig; rec = newRecord(b.dataset.type); Object.assign(rec.h, keep); rec.sig = sig; rec.certNo = autoCertNo();
       renderEntry(); persistCurrent(); return;
     }
     const act = b.dataset.act;
     if (act === "pts") { genPoints(); rec.ptAuto = true; renderEntry(); }
-    if (act === "copyRF") { rec.pt.fall = rec.pt.rise.slice(); renderEntry(); toast("Đã gán Giảm = Tăng"); }
-    if (act === "copyFR") { rec.pt.rise = rec.pt.fall.slice(); renderEntry(); toast("Đã gán Tăng = Giảm"); }
+    if (act === "sync") syncRF();
     if (act === "copy1") { rec.ps.high = rec.ps.high.map(() => rec.ps.high[0]); rec.ps.low = rec.ps.low.map(() => rec.ps.low[0]); renderEntry(); toast("Đã chép lần 1 cho cả 5 lần"); }
     if (act === "save") saveRecord();
-    if (act === "new") { const keep = { location: rec.h.location }; const sig = rec.sig; const t = rec.type; rec = newRecord(t); Object.assign(rec.h, keep); rec.sig = sig; rec.certNo = autoCertNo(); renderEntry(); persistCurrent(); window.scrollTo(0, 0); }
+    if (act === "new") { const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree }; const sig = rec.sig; const t = rec.type; rec = newRecord(t); Object.assign(rec.h, keep); rec.sig = sig; rec.certNo = autoCertNo(); renderEntry(); persistCurrent(); window.scrollTo(0, 0); }
     if (act === "preview") renderPreview("all");
     if (b.dataset.pdf) makePdf(b.dataset.pdf);
     if (act === "share") sharePdf();
@@ -266,8 +298,8 @@
   function docInfo() {
     const c = compute();
     const s1 = standById(rec.h.stand1), s2 = standById(rec.h.stand2);
-    const exp = [s1, rec.type === "PT" ? s2 : null].filter(Boolean).filter(s => isExpired(s, rec.h.calDate));
-    return { c, info: { stand1: s1, stand2: s2, loc: locInfo(rec.h.location), draft: exp.length ? "CHUẨN HẾT HẠN, CẦN CẬP NHẬT" : (c.warns.some(w => w.startsWith("Chưa nhập")) ? "CHƯA ĐỦ CHỮ KÝ" : "") } };
+    const exp = settings.warnExpired ? [s1, rec.type === "PT" ? s2 : null].filter(Boolean).filter(s => isExpired(s, rec.h.calDate)) : [];
+    return { c, info: { stand1: s1, stand2: s2, loc: recLoc(), draft: exp.length ? "CHUẨN HẾT HẠN, CẦN CẬP NHẬT" : (c.warns.some(w => w.startsWith("Chưa nhập")) ? "CHƯA ĐỦ CHỮ KÝ" : "") } };
   }
   function pagesHtml(which) {
     const { c, info } = docInfo();
@@ -326,12 +358,12 @@
   /* ---------- records tab ---------- */
   function renderRecords() {
     const q = ($("#rq") && $("#rq").value || "").toLowerCase();
-    const list = records.filter(r => !q || [r.h.tag, r.certNo, r.h.model, r.h.location].join(" ").toLowerCase().includes(q));
+    const list = records.filter(r => !q || [r.h.tag, r.certNo, r.h.model, r.h.location, r.h.locFree].join(" ").toLowerCase().includes(q));
     $("#v-records").innerHTML = `<div class="card"><h2>Hồ sơ đã lưu <small>(${records.length})</small></h2>
       <input id="rq" placeholder="Tìm tag, số chứng chỉ, model…" value="${esc(q)}">
       <div class="btns"><button class="btn" data-r="csv">Xuất danh mục CSV</button><button class="btn" data-r="backup">Sao lưu JSON</button><label class="btn">Nhập JSON<input type="file" id="imp" accept=".json,application/json" hidden></label></div>
       ${list.length ? list.map(r => `<div class="rec"><div><b>${esc(r.h.tag)}</b> <span class="tag">${r.type}</span> ${r.summary ? `<span class="${r.summary.pass ? "ok" : "bad"}">${r.summary.pass ? "Pass" : "Fail"}</span>` : ""}<br>
-        <small class="mut">${esc(r.certNo)} · ${esc(r.h.calDate)} · ${esc(r.h.location)} · U=${esc(r.summary ? r.summary.U : "—")}</small></div>
+        <small class="mut">${esc(r.certNo)} · ${esc(r.h.calDate)} · ${esc(r.h.locMode === "free" ? r.h.locFree : r.h.location)} · U=${esc(r.summary ? r.summary.U : "—")}</small></div>
         <div class="ra"><button class="btn sm" data-r="open" data-id="${r.id}">Mở</button><button class="btn sm" data-r="dup" data-id="${r.id}">Nhân bản</button><button class="btn sm" data-r="del" data-id="${r.id}">Xoá</button></div></div>`).join("") : `<p class="mut">Chưa có hồ sơ.</p>`}</div>`;
     const imp = $("#imp"); if (imp) imp.onchange = importJson;
     const rq = $("#rq"); rq.oninput = () => { const pos = rq.selectionStart; renderRecords(); const n = $("#rq"); n.focus(); n.setSelectionRange(pos, pos); };
@@ -352,7 +384,7 @@
     if (b.dataset.r === "backup") saveFile(new Blob([JSON.stringify({ app: "lab-pvgas-services", records, stands, settings }, null, 1)], { type: "application/json" }), `LAB_PVGAS_backup_${todayISO()}.json`);
     if (b.dataset.r === "csv") {
       const head = ["Số chứng chỉ", "Loại", "Location", "Tag", "Mô tả", "Hãng", "Model", "Serial", "Min", "Max", "Đơn vị", "Pset", "Đơn vị Pset", "Độ chính xác", "Ngày HC", "U", "Kết quả", "Kiểm định viên", "Người kiểm soát"];
-      const rows = records.map(r => [r.certNo, r.type, r.h.location, r.h.tag, r.h.description, r.h.maker, r.h.model, r.h.serial, r.h.min, r.h.max, r.h.unit, r.type === "PS" ? r.h.pset : "", r.type === "PS" ? r.h.unitPset : "", r.h.acc, r.h.calDate, r.summary ? r.summary.U : "", r.summary ? (r.summary.pass ? "Đạt (Pass)" : "Không đạt (Fail)") : "", r.sig.inspector, r.sig.controller]);
+      const rows = records.map(r => [r.certNo, r.type, r.h.locMode === "free" ? r.h.locFree : r.h.location, r.h.tag, r.h.description, r.h.maker, r.h.model, r.h.serial, r.h.min, r.h.max, r.h.unit, r.type === "PS" ? r.h.pset : "", r.type === "PS" ? r.h.unitPset : "", r.h.acc, r.h.calDate, r.summary ? r.summary.U : "", r.summary ? (r.summary.pass ? "Đạt (Pass)" : "Không đạt (Fail)") : "", r.sig.inspector, r.sig.controller]);
       const csv = "﻿" + [head].concat(rows).map(a => a.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
       saveFile(new Blob([csv], { type: "text/csv" }), `DanhMuc_${todayISO()}.csv`);
     }
@@ -420,6 +452,7 @@
       <div class="card"><h2>Tiêu đề & chân trang</h2><div class="grid">
         ${f("Dòng 1", "labLines.0", 1)}${f("Dòng 2", "labLines.1", 1)}${f("Địa chỉ", "labLines.2", 1)}${f("Điện thoại", "labLines.3", 1)}
         ${f("Watermark trang kết quả", "watermark", 1)}${f("Chân trang", "footer", 1)}
+        <label class="f"><span>Cảnh báo chuẩn hết hạn</span><select data-sp="warnExpired"><option value=""${settings.warnExpired ? "" : " selected"}>Tắt (tạm thời)</option><option value="1"${settings.warnExpired ? " selected" : ""}>Bật – đóng dấu BẢN NHÁP</option></select></label>
         <label class="f"><span>In logo đầu trang</span><select data-sp="showLogo"><option value="1"${settings.showLogo ? " selected" : ""}>Có</option><option value=""${settings.showLogo ? "" : " selected"}>Không (giấy in sẵn logo)</option></select></label></div></div>
       <div class="card"><h2>Mặc định theo loại</h2><div class="grid">
         ${f("PT – Phương pháp", "PT.procedure")}${f("PT – Mã biểu mẫu ĐKĐBĐ", "PT.form")}${f("PT – Tiền tố số CC", "PT.prefix")}${f("PT – Môi trường", "PT.env", 1)}
@@ -431,7 +464,7 @@
   }
   function onSettingsInput(e) {
     const p = e.target.dataset.sp; if (!p) return;
-    let v = e.target.value; if (p === "showLogo") v = !!v; if (p === "dueMonths") v = num(v) || 12;
+    let v = e.target.value; if (p === "showLogo" || p === "warnExpired") v = !!v; if (p === "dueMonths") v = num(v) || 12;
     const ks = p.split("."); const last = ks.pop(); const t = ks.reduce((a, k) => a[k], settings); t[last] = v;
     store.set("settings", settings);
   }

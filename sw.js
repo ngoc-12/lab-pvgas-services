@@ -1,4 +1,4 @@
-const CACHE = "lab-pvgas-v1";
+const CACHE = "lab-pvgas-v2";
 const FILES = ["./", "./index.html", "./app.js", "./calc.js", "./data.js", "./docs.js", "./manifest.webmanifest",
   "./vendor/html2canvas.min.js", "./vendor/jspdf.umd.min.js", "./assets/logo.jpg", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });

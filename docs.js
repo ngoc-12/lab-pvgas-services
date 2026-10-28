@@ -123,7 +123,7 @@
     const kv = (a, b) => `<tr><td>${a}</td><td>${esc(b)}</td></tr>`;
     const s1 = info.stand1, s2 = info.stand2;
     const left = [
-      kv("Số chứng chỉ", rec.certNo), kv("Location", `${h.location} – ${info.loc.locVN}`), kv("Tag Name", h.tag),
+      kv("Số chứng chỉ", rec.certNo), kv("Location", info.loc.code ? `${info.loc.code} – ${info.loc.locVN}` : info.loc.locVN), kv("Tag Name", h.tag),
       kv("Description", PT ? h.description : h.description), kv("Dut Model", h.model), kv("Dut Serial", h.serial), kv("Dut Manufacture", h.maker),
       kv("Min / Max Range", `${h.min} ÷ ${h.max} ${h.unit}`), kv("Dut Accuracy", PT ? `±${h.acc}%FS` : `±${h.acc}% Pset`),
       PT ? "" : kv("Pset", `${h.pset} ${h.unitPset}`), PT ? "" : kv("Type / Microswitch", `${h.psType} / ${h.micro}`), PT ? "" : kv("Rising/Falling (QTG)", h.dirQTG),

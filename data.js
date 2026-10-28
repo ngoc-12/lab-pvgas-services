@@ -33,6 +33,7 @@ window.LabSeed = {
     watermark: "PHÒNG TNHC - CÔNG TY DVK - VILAS 389 (ĐK18)",
     footer: "Giấy chứng nhận và kết quả hiệu chuẩn không được sao chép lại nếu không được sự đồng ý bằng văn bản của Phòng Thử nghiệm Hiệu chuẩn – Công ty Dịch Vụ Khí.",
     showLogo: true,
+    warnExpired: false,
     dueMonths: 12,
     PT: { procedure: "DVK.LAB.TM.21", env: "Nhiệt độ (Temp): 23±2 °C, Độ ẩm (Humidity): <70%RH", form: "TM.10.BM.112.2-1", prefix: "CN.PT" },
     PS: { procedure: "ĐLVN 133:2004", env: "Nhiệt độ (Temp): 23±2 Deg C, Độ ẩm (Humidity): <70%RH", form: "DVK.LAB.TM.10.BM.133-03", prefix: "CN.PS" }
