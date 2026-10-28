@@ -1,0 +1,16 @@
+{
+ "name": "LAB PVGAS Services",
+ "short_name": "LAB PVGAS",
+ "description": "Nhập QTG, tính ĐKĐBĐ và xuất chứng chỉ hiệu chuẩn PT/PS",
+ "lang": "vi",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#f5f4ee",
+ "theme_color": "#f5f4ee",
+ "icons": [
+  {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+  {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+  {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+ ]
+}
