@@ -18,3 +18,9 @@ Bản hiện tại: **PT/DPT (4–20 mA)** và **PS/DPS**. Không làm PSV.
 `vendor/` jsPDF 2.5.1 + html2canvas 1.4.1 (offline) · `sw.js` cache offline.
 
 Cập nhật app: sửa file, tăng `CACHE` trong `sw.js`, push lên `main`.
+
+## Bản v3 – mẫu 2026 (29/10/2026)
+- Xuất 3 loại theo mẫu 2026: **Biên bản hiệu chuẩn (QTG)** BB.PT/BB.PS (DVK.LAB.TM21.PL03 / ĐLVN 133:2004.PL1), **Giấy chứng nhận 2 trang** theo MailMerge_PT_Cert / MailMerge_PS_Cert, **Bảng Uncer** theo sheet DLVN112-2002_Rev2 / DLVN133 - 2004 kèm khối "Kiểm tra".
+- Tab Hồ sơ: **Bảng kiểm tra PT/PS (QC)** gom nhiều hồ sơ như sheet ẩn "Kiểm tra".
+- Danh mục chuẩn và địa điểm lấy từ PT_DGCP_10_2026.xls. Công thức đối chiếu lại: PT 31/31, PS 13/13 thiết bị DGCP; số in trên chứng chỉ trùng 30/30 chứng chỉ trong PT_DGCP_10-2026.docx.
+- PS nhập Áp tác động / Áp trả về như QTG, theo chiều Rising/Falling.

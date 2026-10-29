@@ -1,7 +1,8 @@
 /* LAB PVGAS Services – calculation core.
  * Ported 1:1 from the company workbooks (macros by khainv@pvgas.com.vn):
- *  - PT : "GPP_2024_PT_Uncer Form.xls"  sheet DLVN112-2002_Rev2 (form TM.10.BM.112.2-1) + Data112
- *  - PS : "GPP_PS Uncer Form.xls"       sheet "DLVN133 - 2004" (form DVK.LAB.TM.10.BM.133-03) + Data133
+ *  - PT : "PT_DGCP_10_2026.xls"  sheet DLVN112-2002_Rev2 (form TM.10.BM.112.2-1) + Data112
+ *  - PS : "PS_DGCP_10_2026.xls"  sheet "DLVN133 - 2004" (form DVK.LAB.TM.10.BM.133-03) + Data133
+ * Re-checked 2026-10-29 against every DGCP 10/2026 row: PT 31/31 and PS 13/13 identical (rel. error < 1e-9).
  * Cell references are kept in comments so the Quality Checker can trace every number.
  */
 (function (root) {
@@ -36,6 +37,9 @@
     if (frac4 >= 10) return { text: xround(x + 0.00005, 4).toFixed(4), flag: false };
     return { text: xround(x + 0.00005, 4).toFixed(4), flag: true };
   }
+
+  // Certificate PT 2026: Data112!GC/GQ keep 4 decimals, the mail-merge prints 3 ("0,320").
+  function u3(x) { return isFinite(x) ? xround(xround(x, 4), 3) : NaN; }
 
   function mean(a) { return a.reduce((s, v) => s + v, 0) / a.length; }
   function devsq(a) { const m = mean(a); return a.reduce((s, v) => s + (v - m) * (v - m), 0); }
@@ -107,7 +111,7 @@
       const ucAvg = (cols[i].uc + cols[i + m].uc) / 2;      // I46
       const Upct = ucAvg * k;                               // K46
       const U = Upct * span / 100;                          // J46 (DUT unit)
-      return { x, ideal, rise: rise[i], fall: fall[i], shcR, shcF, ucAvg, Upct, U };
+      return { x, ideal, rise: rise[i], fall: fall[i], shcR, shcF, shcAvg: (shcR + shcF) / 2, ucAvg, Upct, U }; // H46 = (F46+G46)/2
     });
     const Umax = Math.max(...rows.map(r => r.U));           // Data112!CZ
     const shcMax = Math.max(...rows.map(r => Math.max(Math.abs(r.shcR), Math.abs(r.shcF))));
@@ -115,7 +119,8 @@
     const pass = Umax <= limU && !(shcMax > limI);          // Data112!IF
     return {
       type: "PT", k, a, b, Sy, Sa, Sb, r, uv, E9: S1.min, E10: S1.max, E11: S1.unc, E12, E13, H12, H13, H9, H10,
-      factor1: S1.f, cols, rows, Umax, shcMax, limU, limI, pass,
+      factor1: S1.f, cols, rows, Umax, shcMax, limU, limI, pass, K34, L34, M34, N34,
+      F41: Math.max(...rows.map(r => r.ucAvg)), F42: k * Math.max(...rows.map(r => r.ucAvg)), // F41 = MAX(I46:I50), F42 = E16*F41
       UmaxText: roundUnc(Umax),
       checks: { uOK: Umax <= limU, iOK: !(shcMax > limI) }
     };
@@ -156,7 +161,7 @@
   // Data112!V/X : EOMONTH(calDate, months)
   function eomonth(d, months) { return new Date(d.getFullYear(), d.getMonth() + months + 1, 0); }
 
-  const api = { UNITS, factor, xround, roundUnc, calcPT, calcPS, eomonth, steyx, linest };
+  const api = { UNITS, factor, xround, roundUnc, u3, calcPT, calcPS, eomonth, steyx, linest };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.LabCalc = api;
 })(typeof self !== "undefined" ? self : this);

@@ -1,6 +1,7 @@
-/* Builds the printable A4 pages (certificate, QTG record, uncertainty sheet) as HTML.
- * Layout follows the company mail-merge templates:
- *   "14 PT - Thang 8.docx" (PT) and "133.3-2 PS 801 Cert khong logo vcl.docx" (PS).
+/* Builds the printable A4 pages as HTML, following the 2026 company templates:
+ *   QTG  : QTG_PT_PT-1506A.docx (DVK.LAB.TM21.PL03), QTG_PS_PSHH-0522.docx (ĐLVN 133:2004.PL1)
+ *   Cert : MailMerge_PT_Cert.docx, MailMerge_PS_Cert.docx (2 pages, as in the merged PT_DGCP_10-2026.docx)
+ *   Uncer: sheets "DLVN112-2002_Rev2" / "DLVN133 - 2004" + hidden sheet "Kiểm tra" of PT/PS_DGCP_10_2026.xls
  */
 (function () {
   "use strict";
@@ -11,212 +12,326 @@
   function toDate(s) { if (!s) return null; const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
   const dVN = d => d ? `${p2(d.getDate())}-${p2(d.getMonth() + 1)}-${d.getFullYear()}` : "";
   const dEN = d => d ? `${p2(d.getDate())}-${MON[d.getMonth()]}-${String(d.getFullYear()).slice(2)}` : "";
-  const fP = v => isFinite(v) ? C.xround(v, 2).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";   // "#,#0.00"
-  const f3 = v => isFinite(v) ? C.xround(v, 3).toFixed(3) : "";                                                                          // "##0.000"
-  const fN = (v, d) => isFinite(v) ? C.xround(v, d).toFixed(d) : "";
+
+  // Vietnamese number style used by the merged certificates: "5.000,00", "-0,018".
+  function vn(v, d) {
+    if (!isFinite(v)) return "";
+    const s = C.xround(v, d).toFixed(d);
+    const neg = s.startsWith("-") && Number(s) !== 0;
+    const [i, f] = s.replace("-", "").split(".");
+    return (neg ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (f ? "," + f : "");
+  }
+  const vnTxt = s => String(s == null ? "" : s).replace(/(\d)\.(\d)/g, "$1,$2");   // "0.0001 bar" -> "0,0001 bar"
+  const num = v => (v === "" || v == null) ? NaN : Number(String(v).replace(",", "."));
+  function decimalsOf(arr) { let d = 0; arr.forEach(v => { const s = String(v == null ? "" : v).replace(",", "."); const i = s.indexOf("."); if (i >= 0) d = Math.max(d, s.length - i - 1); }); return d; }
+  const pDec = arr => Math.min(3, Math.max(2, decimalsOf(arr)));
   const g = (v, d = 6) => isFinite(v) ? Number(v.toPrecision(d)).toString() : "—";
-  function decimalsOf(arr, min = 1) { let d = min; arr.forEach(v => { const s = String(v); const i = s.indexOf("."); if (i >= 0) d = Math.max(d, s.length - i - 1); }); return Math.min(d, 4); }
+  const cb = on => `<span class="cb${on ? " on" : ""}"></span>`;
+  const it = s => `<i>${s}</i>`;
 
-  function standLines(s, dutUnit) {
-    if (!s) return {};
-    const rangeMax = s.kind === "e" && s.certRange ? s.certRange : s.max;
-    return {
-      name: s.name, model: s.model, serial: s.serial, maker: s.maker,
-      range: `(${s.min}÷${rangeMax}) ${s.unit}`,
-      unc: `${s.unc} ${s.uncUnit}`, trace: s.trace
-    };
+  function locOf(info) { return info.loc || {}; }
+  function standTxt(s) {
+    if (!s) return { name: "", model: "", serial: "", maker: "", range: "", unc: "", trace: "", acc: "" };
+    const max = s.kind === "e" && s.certRange ? s.certRange : s.max;
+    const unc = s.uncText || `${s.unc} ${s.uncUnit}`;
+    return { name: s.name, model: s.model, serial: s.serial, maker: s.maker, range: `(${vn(s.min, decimalsOf([s.min]))}÷${vn(max, decimalsOf([max]))}) ${s.unit}`, unc: vnTxt(unc), uncRaw: unc, trace: s.trace, acc: s.accuracy || "" };
   }
+  // QTG shows "Fluke 754" when the model is only a number
+  const qModel = s => !s ? "" : (/^\d+$/.test(String(s.model)) ? `${s.maker} ${s.model}` : s.model);
+  const qRange = s => !s ? "" : `(${s.min}÷${s.kind === "e" && s.certRange ? s.certRange : s.max}) ${s.unit}`;
+  const accTxt = (h, PT) => PT ? `±${vnTxt(h.acc)}%FS` : `±${vnTxt(h.acc)}%.Pset`;
 
-  function header(st) {
-    if (!st.showLogo) return `<div class="hdr-space"></div>`;
-    return `<div class="hdr"><img src="assets/logo.jpg" alt=""><div class="hdr-t">${st.labLines.map((l, i) => `<div class="${i < 2 ? "b" : ""}">${esc(l)}</div>`).join("")}</div></div>`;
-  }
-  const footer = (st, i, n) => `<div class="ftr"><span>${esc(st.footer)}</span><span>Trang (Page) ${i}/${n}</span></div>`;
-  const wm = st => `<div class="wm">${esc(st.watermark)}<br>${esc(st.watermark)}</div>`;
   const draft = info => info.draft ? `<div class="draft">BẢN NHÁP – ${esc(info.draft)}</div>` : "";
+  const wmImg = `<img class="wmimg" src="assets/wm.jpg" alt="">`;
 
-  function sigBlock(lTitle, lEn, lName, rTitle, rEn, rName) {
-    return `<table class="sig"><tr><td><b>${esc(lTitle)}</b><br><i>${esc(lEn)}</i><div class="sp"></div><b>${esc(lName)}</b></td>
-      <td><b>${esc(rTitle)}</b><br><i>${esc(rEn)}</i><div class="sp"></div><b>${esc(rName)}</b></td></tr></table>`;
+  /* ================= CERTIFICATE ================= */
+  function certHeader(st) {
+    const L = st.certLines;
+    return `<div class="chdr">${st.showLogo ? `<img src="assets/logo2026.jpg" alt="">` : `<span class="nologo"></span>`}<div class="t">
+      <div>${esc(L[0])}</div><div class="b">${esc(L[1])} <span class="red">${esc(st.companyTag)}</span></div>
+      <div class="i">${esc(L[2])}</div><div class="i">${esc(L[3])}</div><div class="i">${esc(L[4])}</div></div></div><div class="crule"></div>`;
   }
+  const certFooter = (st, i, n) => `<table class="cftr"><tr><td class="pg"><b>Trang: ${i}/${n}</b><br><i>(No of paper)</i></td>
+    <td><b>${esc(st.footerVN)}</b><br><i>${esc(st.footerEN)}</i></td></tr></table>`;
 
-  /* ---------------- Certificate page 1 ---------------- */
   function certPage1(rec, res, st, info) {
-    const h = rec.h, PT = rec.type === "PT";
+    const h = rec.h, PT = rec.type === "PT", L = locOf(info);
     const cal = toDate(h.calDate), due = C.eomonth(cal, Number(st.dueMonths) || 12), iss = toDate(h.issueDate) || cal;
-    const s1 = standLines(info.stand1), s2 = PT ? standLines(info.stand2) : null;
-    const obj = PT ? `Thiết bị chuyển đổi áp suất <i>(${esc(h.description)})</i>` : `Thiết bị đặt mức áp suất <i>(Pressure Switch)</i>`;
-    const spec = PT
-      ? `Phạm vi đo <i>(Range)</i>: (${esc(h.min)}÷${esc(h.max)}) ${esc(h.unit)}<br>Độ chính xác <i>(Accuracy)</i>: ±${esc(h.acc)}%FS`
-      : `Dải làm việc <i>(Calib Range)</i>: (${esc(h.min)} ÷ ${esc(h.max)}) ${esc(h.unit)}<br>Áp suất đặt <i>(Set point)</i>: ${esc(h.pset)} ${esc(h.unitPset)}<br>Độ chính xác <i>(Accuracy)</i>: ±${esc(h.acc)}% Pset`;
-    const typeRow = PT
-      ? `<tr><td>Kiểu <i>(Type)</i>: ${esc(h.model)}</td><td>Số <i>(Serial No)</i>/Mã QL <i>(Tag No)</i>: ${esc(h.serial)}/<b>${esc(h.tag)}</b></td></tr>`
-      : `<tr><td>Kiểu <i>(Type)</i>: ${esc(h.model)}</td><td>Mã QL <i>(Tag No)</i>: <b>${esc(h.tag)}</b><br>Số hiệu <i>(Serial No.)</i>: ${esc(h.serial)}</td></tr>`;
-    const sRow = (lab, en, k) => `<tr><td class="ind">${lab} <i>(${en})</i>:</td><td>${esc(s1[k] || "")}</td>${PT ? `<td>${esc(s2[k] || "")}</td>` : ""}</tr>`;
-    return `<section class="a4">${header(st)}${draft(info)}
-      <h1>GIẤY CHỨNG NHẬN HIỆU CHUẨN</h1><div class="sub"><i><b>(Calibration Certificate)</b></i></div>
-      <div class="no">Số <i>(N<sup>o</sup>)</i>: ${esc(rec.certNo)}</div>
-      <table class="kv">
-        <tr><td>Tên đối tượng <i>(Object)</i>:</td><td>${obj}</td></tr>
-        ${typeRow}
-        <tr><td>Nơi sản xuất <i>(Manufacturer)</i>:</td><td>${esc(h.maker)}</td></tr>
-        <tr><td>Đặc trưng kỹ thuật đo lường<br><i>(Specification)</i>:</td><td>${spec}</td></tr>
-        <tr><td>Cơ sở sử dụng <i>(Customer)</i>:</td><td>${esc(info.loc.custVN)}<br>Địa điểm lắp đặt <i>(Location)</i>: ${esc(info.loc.locVN)}</td></tr>
-        <tr><td>Phương pháp thực hiện<br><i>(Method of calibration)</i>:</td><td>${esc(h.procedure)}<br><br>Điều kiện môi trường <i>(Environment)</i>:<br>${esc(h.env)}</td></tr>
+    const s1 = standTxt(info.stand1), s2 = PT ? standTxt(info.stand2) : null;
+    const row = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
+    let top;
+    if (PT) {
+      top = row(`Tên phương tiện đo ${it("(Dut)")}:`, `Thiết bị chuyển đổi áp suất ${it(`(${esc(h.description)})`)}`)
+        + row(`Kiểu ${it("(Type)")}: ${esc(h.model)}`, `Số ${it("(Serial)")}/Mã QL ${it("(Tag)")}:<br>${esc(h.serial)}/${esc(h.tag)}`)
+        + row(`Nơi sản xuất ${it("(Manufacturer)")}:`, esc(h.maker))
+        + row(`Đặc trưng kỹ thuật đo lường<br>${it("(Specification)")}:`, `Phạm vi đo ${it("(Range)")}: (${vnTxt(h.min)}÷${vnTxt(h.max)}) ${esc(h.unit)}<br>Độ chính xác ${it("(Accuracy)")}: ${accTxt(h, true)}`);
+    } else {
+      top = row(`Tên đối tượng ${it("(Dut)")}:`, `Thiết bị đặt mức áp suất ${it(`(${esc(h.description)})`)}`)
+        + row(`Kiểu ${it("(Type)")}: ${esc(h.model)}`, `Mã QL ${it("(Tag No)")}: ${esc(h.tag)}<br>Số hiệu ${it("(Serial No.)")}: ${esc(h.serial)}`)
+        + row(`Nơi sản xuất ${it("(Manufacturer)")}:`, esc(h.maker))
+        + row(`Đặc trưng kỹ thuật đo lường (${it("Specification")}):`, `Dải làm việc ${it("(Calib Range)")}: (${vnTxt(h.min)} ÷ ${vnTxt(h.max)}) ${esc(h.unit)}<br>Áp suất đặt ${it("(Set point)")}: ${vnTxt(h.pset)} ${esc(h.unitPset)}<br>Độ chính xác ${it("(Accuracy)")}: ${accTxt(h, false)}`);
+    }
+    top += row(`Cơ sở sử dụng ${it("(Customer)")}:`, esc(L.custVN))
+      + row(`Địa điểm lắp đặt ${it("(Location)")}:`, esc(L.locVN))
+      + row(`Phương pháp thực hiện<br>${it("(Method of calibration)")}:`, esc(h.procedure))
+      + (PT ? row("", `Điều kiện môi trường ${it("(Environment)")}:<br>${envHtml(h.env)}`) : row(`Điều kiện môi trường ${it("(Environment)")}:`, envHtml(h.env)));
+    const sRow = (lab, en, k) => `<tr><td class="ind">${lab} ${it(`(${en})`)}:</td><td>${esc(s1[k])}</td>${PT ? `<td>${esc(s2[k])}</td>` : ""}</tr>`;
+    const stdT = `<table class="ckv std${PT ? "" : " one"}">
+      ${sRow("Tên thiết bị", "Device Name", "name")}${sRow("Kiểu", "Model", "model")}${sRow("Số hiệu", "Serial No.", "serial")}
+      ${sRow("Nơi sản xuất", "Manufacturer", "maker")}${sRow("Phạm vi đo", "Range", "range")}${sRow("Độ KĐBĐ", "Uncertainty", "unc")}${sRow("Dẫn xuất chuẩn", "Traceability", "trace")}</table>`;
+    const day = st.issueDayBlank ? "...." : p2(iss.getDate());
+    return `<section class="a4 cert">${wmImg}<div class="frame"></div>${draft(info)}${certHeader(st)}
+      <h1>GIẤY CHỨNG NHẬN HIỆU CHUẨN</h1><div class="sub"><b><i>(Calibration Certificate)</i></b></div>
+      <div class="no">Số ${it("(N<sup>o</sup>)")}: ${esc(rec.certNo)}</div>
+      <table class="ckv">${top}<tr><td colspan="2">Chuẩn được sử dụng ${it("(Standards used)")}:</td></tr></table>
+      ${stdT}
+      <table class="ckv">
+        ${row(`Kết quả ${it("(Result)")}:`, `Xem kết quả hiệu chuẩn tại trang sau.<br><span class="sm">${it("(The result of the calibration on the next page)")}</span>`)}
+        ${row(`Ngày hiệu chuẩn lại đề nghị<br>${it("(Recalibration recommended)")}:`, `${dVN(due)} ${it(`(${dEN(due)})`)}`)}
       </table>
-      <div class="lbl">Chuẩn được sử dụng <i>(Standards used)</i>:</div>
-      <table class="kv std">
-        ${sRow("Tên thiết bị", "Object", "name")}${sRow("Kiểu", "Model", "model")}${sRow("Số hiệu", "Serial No.", "serial")}
-        ${sRow("Nơi sản xuất", "Manufacturer", "maker")}${sRow("Phạm vi đo", "Range", "range")}${sRow("Độ KĐBĐ", "Uncertainty", "unc")}${sRow("Dẫn xuất chuẩn", "Traceability", "trace")}
-      </table>
-      <table class="kv">
-        <tr><td>Kết quả <i>(Result)</i>:</td><td>Xem kết quả hiệu chuẩn trang sau.<br><i>(The result of the calibration on the next page)</i></td></tr>
-        <tr><td>Ngày hiệu chuẩn đề nghị kế tiếp<br><i>(Recalibration recommended)</i>:</td><td>${dVN(due)} <i>(${dEN(due)})</i></td></tr>
-      </table>
-      <div class="issue"><i class="red">${esc(st.place)}, ngày ${p2(iss.getDate())} tháng ${p2(iss.getMonth() + 1)} năm ${iss.getFullYear()}</i><br><i>(Date of issue)</i></div>
-      ${sigBlock(st.sig1Title, st.sig1TitleEn, st.sig1Name, st.sig2Title, st.sig2TitleEn, st.sig2Name)}
-      ${footer(st, 1, 2)}</section>`;
+      <div class="issue">${it(`${esc(st.place)}, ngày ${day} tháng ${p2(iss.getMonth() + 1)} năm ${iss.getFullYear()}`)}<br>${it("(Date of issue)")}</div>
+      <table class="csig"><tr><td><b>${esc(st.sig1Title)}</b><br>${it(esc(st.sig1TitleEn))}</td><td><b>${esc(st.sig2Title)}</b><br>${it(esc(st.sig2TitleEn))}</td></tr>
+        <tr class="sp"><td>${st.showAccred ? `<img class="accr" src="assets/vilas.jpg" alt="">` : ""}</td><td></td></tr>
+        <tr><td><b>${esc(st.sig1Name)}</b></td><td><b>${esc(st.sig2Name)}</b></td></tr></table>
+      ${certFooter(st, 1, 2)}</section>`;
   }
+  function envHtml(env) { return esc(env).replace(/\((Temp|Humidity)\)/g, "<i>($1)</i>"); }
 
-  /* ---------------- Certificate page 2 (result) ---------------- */
   function certPage2(rec, res, st, info) {
     const h = rec.h, PT = rec.type === "PT", cal = toDate(h.calDate);
-    let table, ueq;
+    let table, mid;
     if (PT) {
-      const rows = res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${fP(r.x)}</td><td>${f3(r.ideal)}</td><td>${f3(r.rise)}</td><td>${f3(r.fall)}</td><td>${f3(r.shcR)}</td><td>${f3(r.shcF)}</td><td>${C.roundUnc(r.U).text}</td></tr>`).join("");
-      table = `<table class="res"><thead>
-        <tr><th rowspan="2">TT<br><i>(N<sup>o</sup>)</i></th><th rowspan="2">AS đặt<br><i>(Input Pressure)</i><br>${esc(h.unit)}</th><th rowspan="2">Tín hiệu điện quy đổi<br><i>(Ideal Output Current)</i><br>mA</th>
-        <th colspan="2">Giá trị dòng trên thiết bị<br><i>(Measured Output Current)</i><br>mA</th><th colspan="2">Số hiệu chính<br><i>(Correction)</i><br>mA</th><th rowspan="2">Độ KĐBĐ<br><i>(Uncertainty)</i><br>${esc(h.unit)}</th></tr>
-        <tr><th>Tăng<br><i>(Increasing)</i></th><th>Giảm<br><i>(Decreasing)</i></th><th>Tăng<br><i>(Increasing)</i></th><th>Giảm<br><i>(Decreasing)</i></th></tr></thead><tbody>${rows}</tbody></table>`;
-      ueq = `<p><u>Công thức hiệu chuẩn</u> <i>(Calibration equation)</i>: y = ${f3(res.a)} + ${f3(res.b)} x</p>
-        <ul><li>x: giá trị áp suất chỉ thị trên phương tiện chuẩn.<br><i>(x: Value of Input pressure from standard device)</i></li>
-        <li>y: giá trị tín hiệu điện chỉ trên phương tiện cần hiệu chuẩn.<br><i>(y: Value of Measured output current from transmitter)</i></li></ul>
-        <p>Độ không đảm bảo đo mở rộng lớn nhất được tính ứng với độ tin cậy 95%, hệ số phủ k=2:<br><i>(The maximum expanded uncertainty is based upon a standard uncertainty multiplied by a coverage factor k = 2, providing a level of confidence of approximate 95%):</i></p>
-        <p class="c">U<sub>exp-max</sub> = ${res.UmaxText.text} ${esc(h.unit)}</p>`;
+      const pd = pDec(rec.pt.points), u = esc(h.unit);
+      const rows = res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(r.x, pd)}</td><td>${vn(r.ideal, 3)}</td><td>${vn(r.rise, 3)}</td><td>${vn(r.fall, 3)}</td><td>${vn(r.shcR, 3)}</td><td>${vn(r.shcF, 3)}</td><td>${vn(C.u3(r.U), 3)}</td></tr>`).join("");
+      table = `<table class="res cres"><thead>
+        <tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">AS đặt<br>${it("(Input Pressure)")}<br>${u}</th><th rowspan="2">Tín hiệu điện quy đổi<br>${it("(Ideal Output Current)")}<br>mA</th>
+        <th colspan="2">Giá trị dòng trên thiết bị<br>${it("(Measured Output Current)")}<br>mA</th><th colspan="2">Số hiệu chính<br>${it("(Correction)")}<br>mA</th><th rowspan="2">Độ KĐBĐ<br>${it("(Uncertainty)")}<br>${u}</th></tr>
+        <tr><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th></tr></thead><tbody>${rows}</tbody></table>`;
+      mid = `<p><u>Công thức hiệu chuẩn</u> ${it("<u>(Calibration equation)</u>")}: y = ${vn(res.a, 3)} + ${vn(res.b, 3)} x</p>
+        <ul class="dash"><li>x: giá trị áp suất chỉ thị trên phương tiện chuẩn.<br>${it("(x: Value of Input pressure from standard device)")}</li>
+        <li>y: giá trị tín hiệu điện chỉ trên phương tiện cần hiệu chuẩn.<br>${it("(y:Value of Measured output current from transmitter)")}</li></ul>
+        <p>Độ không đảm bảo đo mở rộng lớn nhất được tính ứng với độ tin cậy 95%, hệ số phủ k=2:<br>${it("(The maximum expanded uncertainty is based upon a standard uncertainty multiplied by a coverage factor k = 2, providing a level of confidence of approximate 95%):")}</p>
+        <p class="c">U<sub>exp-max</sub> = ${vn(C.u3(res.Umax), 3)} ${u}</p>`;
     } else {
-      const d = decimalsOf([h.pset, ...rec.ps.high, ...rec.ps.low]);
-      const rows = res.set.map((v, i) => `<tr><td>${p2(i + 1)}</td><td>${i === 0 ? esc(h.pset) : ""}</td><td>${fN(v, d)}</td><td>${fN(res.reset[i], d)}</td><td>${fN(res.setDev[i], d)}</td><td>${fN(res.resetDev[i], d)}</td><td>${i === 0 ? res.Utext.text : ""}</td></tr>`).join("");
-      const u = esc(h.unitPset);
-      table = `<table class="res"><thead><tr><th>TT<br><i>(N<sup>o</sup>)</i></th><th>Áp suất đặt<br><i>(Pset)</i><br>${u}</th><th>Áp suất mở<br><i>(Set-Pressure)</i><br>${u}</th><th>Áp suất đóng<br><i>(Reset-Pressure)</i><br>${u}</th><th>Chênh mở<br><i>(Set-deviation)</i><br>${u}</th><th>Chênh đóng<br><i>(Reset-deviation)</i><br>${u}</th><th>Độ KĐBĐ<br><i>(Uncertainty)</i><br>${u}</th></tr></thead><tbody>${rows}</tbody></table>`;
-      ueq = `<p>Độ không đảm bảo đo mở rộng được tính ứng với độ tin cậy 95%, hệ số phủ k=2:<br><i>(The reported expanded uncertainty is based upon a standard uncertainty multiplied by a coverage factor k = 2, providing a level of confidence of approximate 95%):</i></p>
-        <p class="c">U = ${res.Utext.text} ${u}</p>`;
+      const pd = pDec([h.pset, ...rec.ps.set, ...rec.ps.reset]), u = esc(h.unitPset), U = vnTxt(res.Utext.text);
+      const rows = res.set.map((v, i) => `<tr><td>${p2(i + 1)}</td>${i === 0 ? `<td rowspan="5">${vnTxt(h.pset)}</td>` : ""}<td>${vn(v, pd)}</td><td>${vn(res.reset[i], pd)}</td><td>${vn(res.setDev[i], pd)}</td><td>${vn(res.resetDev[i], pd)}</td>${i === 0 ? `<td rowspan="5">${U}</td>` : ""}</tr>`).join("");
+      table = `<table class="res cres"><thead><tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp suất đặt ${it("(Pset)")}<br>${u}</th><th rowspan="2">As tác động<br>${it("(Set-Pressure)")}<br>${u}</th><th rowspan="2">As trả về<br>${it("(Reset-Pressure)")}<br>${u}</th>
+        <th colspan="2">Áp suất chênh lệch</th><th rowspan="2">Độ KĐBĐ<br>${it("(Uncertainty)")}<br>${u}</th></tr>
+        <tr><th>${it("Set-deviation")}<br>${u}</th><th>${it("Reset-deviation")}<br>${u}</th></tr></thead><tbody>${rows}</tbody></table>`;
+      mid = `<p>Độ không đảm bảo đo mở rộng được tính ứng với độ tin cậy 95%, hệ số phủ k=2:<br>${it("(The reported expanded uncertainty is based upon a standard uncertainty multiplied by a coverage factor k = 2, providing a level of confidence of approximate 95%):")}</p>
+        <p class="c">Giá trị cài đặt ${it("(Set point)")}: ${vnTxt(h.pset)} ${u}, U = ${U} ${u}</p>`;
     }
     const pf = res.pass ? "Đạt (Pass)" : "Không đạt (Fail)";
     const en = res.pass ? "(The calibration result meets the accuracy requirement)." : "(The calibration result does not meet the accuracy requirement).";
-    return `<section class="a4">${wm(st)}${header(st)}${draft(info)}
-      <h1>KẾT QUẢ HIỆU CHUẨN</h1><div class="sub"><i><b>(Calibration Result)</b></i></div>
-      <div class="c"><b>Kèm theo giấy chứng nhận hiệu chuẩn số</b> <i>(Attached to certificate No)</i>: ${esc(rec.certNo)}</div>
-      <div class="tagline"><span>Tagname: <b>${esc(h.tag)}</b></span><span>Ngày hiệu chuẩn <i>(Calibration Date)</i>: ${dVN(cal)} <i>(${dEN(cal)})</i></span></div>
+    return `<section class="a4 cert">${wmImg}<div class="frame"></div>${draft(info)}
+      <h1 class="r">KẾT QUẢ HIỆU CHUẨN</h1><div class="sub"><b><i>(Calibration Result)</i></b></div>
+      <div class="c"><b>Kèm theo giấy chứng nhận hiệu chuẩn số</b> ${it("(Attached to certificate No)")}: ${esc(rec.certNo)}</div>
+      <div class="tagline"><span>Tagname: <b>${esc(h.tag)}</b></span><span>Ngày hiệu chuẩn ${it("(Calibration Date)")}: ${dVN(cal)} ${it(`(${dEN(cal)})`)}</span></div>
       ${table}
-      <div class="box">${ueq}
-        <p>Các thông tin khác <i>(Other information)</i>:</p>
-        <ul><li>Phương tiện đo này không sử dụng để định lượng hàng hóa, dịch vụ trong mua bán, thanh toán, đảm bảo an toàn, bảo vệ sức khỏe cộng đồng, bảo vệ môi trường, trong thanh tra, kiểm tra, giám định tư pháp và trong các hoạt động công vụ khác.<br><i>(This equipment is not used to quantify goods and services in purchase and sale, payment, safety assurance, community health protection, environmental protection, inspection, examination, judicial expertise and in other official activities)</i></li>
-        <li>Phương tiện đo này không được sử dụng trực tiếp để kiểm định phương tiện đo nhóm 2.<br><i>(This equipment is not used directly to verify the measuring instrument of group 2)</i></li></ul></div>
-      <div class="box"><u>Ghi chú</u> <i>(Note)</i>: Kết quả hiệu chuẩn trên là <b>${pf}</b> với yêu cầu về độ chính xác của thiết bị<br><i>${en}</i></div>
-      ${sigBlock("Người kiểm tra", "(Checked by)", rec.sig.controller, "Người thực hiện", "(Calibrated by)", rec.sig.inspector)}
-      ${footer(st, 2, 2)}</section>`;
+      <div class="box">${mid}
+        <p>Các thông tin khác ${it("(Other information)")}:</p>
+        <ul class="dash"><li>Phương tiện đo này không sử dụng để định lượng hàng hóa, dịch vụ trong mua bán, thanh toán, đảm bảo an toàn, bảo vệ sức khỏe cộng đồng, bảo vệ môi trường, trong thanh tra, kiểm tra, giám định tư pháp và trong các hoạt động công vụ khác.<br>${it("(This equipment is not used to quantify goods and services in purchase and sale, payment, safety assurance, community health protection, environmental protection, inspection, examination, judicial expertise and in other official activities)")}</li>
+        <li>Phương tiện đo này không được sử dụng trực tiếp để kiểm định phương tiện đo nhóm 2.<br>${it("(This equipment is not used directly to verify the measuring instrument of group 2)")}</li></ul></div>
+      <div class="box c"><span class="l"><u>Ghi chú</u> ${it("<u>(Note)</u>")}: Kết quả hiệu chuẩn trên là <b>${pf}</b> với yêu cầu về độ chính xác của thiết bị</span>${it(en)}</div>
+      <table class="csig two"><tr><td><b>Người kiểm tra</b><br>${it("(Checked by)")}</td><td><b>Người thực hiện</b><br>${it("(Calibrated by)")}</td></tr>
+        <tr class="sp"><td></td><td></td></tr><tr><td><b>${esc(rec.sig.controller)}</b></td><td><b>${esc(rec.sig.inspector)}</b></td></tr></table>
+      ${certFooter(st, 2, 2)}</section>`;
   }
 
-  /* ---------------- QTG record (transcription of the handwritten sheet) ---------------- */
+  /* ================= QTG – BIÊN BẢN HIỆU CHUẨN ================= */
+  function qtgHeader(st, PT) {
+    const logo = st.showLogo ? `<img src="assets/logo2026.jpg" alt="">` : `<span class="nologo"></span>`;
+    const lines = PT
+      ? `<div>${esc(st.certLines[1])} <span class="red">${esc(st.companyTag)}</span></div><div class="b u">${esc(st.labName)}</div><div>${esc(st.addrEN)}</div><div>${st.tel}</div>`
+      : `<div>${esc(st.certLines[0])}</div><div class="b">${esc(st.certLines[1])} <span class="red">${esc(st.companyTag)}</span></div><div>${esc(st.addrVN)}</div><div>${esc(st.addrEN)}</div><div>${st.tel}</div>`;
+    return `<div class="qhdr">${logo}<div class="t">${lines}</div></div>`;
+  }
+  function qtgSig(rec) {
+    return `<table class="qsig"><tr><td><b>Người soát lại</b><br>${it("(Checked by)")}</td><td><b>Người thực hiện</b><br>${it("(Calibrated by)")}</td></tr>
+      <tr class="sp"><td></td><td></td></tr><tr><td><b>${esc(rec.sig.controller)}</b></td><td><b>${esc(rec.sig.inspector)}</b></td></tr></table>`;
+  }
   function qtgPage(rec, res, st, info) {
-    const h = rec.h, PT = rec.type === "PT", cal = toDate(h.calDate);
-    const kv = (a, b) => `<tr><td>${a}</td><td>${esc(b)}</td></tr>`;
-    const s1 = info.stand1, s2 = info.stand2;
-    const left = [
-      kv("Số chứng chỉ", rec.certNo), kv("Location", info.loc.code ? `${info.loc.code} – ${info.loc.locVN}` : info.loc.locVN), kv("Tag Name", h.tag),
-      kv("Description", PT ? h.description : h.description), kv("Dut Model", h.model), kv("Dut Serial", h.serial), kv("Dut Manufacture", h.maker),
-      kv("Min / Max Range", `${h.min} ÷ ${h.max} ${h.unit}`), kv("Dut Accuracy", PT ? `±${h.acc}%FS` : `±${h.acc}% Pset`),
-      PT ? "" : kv("Pset", `${h.pset} ${h.unitPset}`), PT ? "" : kv("Type / Microswitch", `${h.psType} / ${h.micro}`), PT ? "" : kv("Rising/Falling (QTG)", h.dirQTG),
-      kv("Stand1 (áp suất)", s1 ? `${s1.key} – S/N ${s1.serial}` : ""), PT ? kv("Stand2 (điện)", s2 ? `${s2.key} – S/N ${s2.serial}` : "") : "",
-      kv("Calibration Date", dVN(cal)), kv("Đã hiệu chỉnh áp suất", "Yes"), kv("Phương pháp", h.procedure), kv("Môi trường", h.env)
-    ].join("");
-    let data;
+    const h = rec.h, PT = rec.type === "PT", cal = toDate(h.calDate), L = locOf(info);
+    const S = PT ? st.PT : st.PS, s1 = info.stand1, s2 = info.stand2;
+    const bb = `${S.bbPrefix}.${rec.certNo.split(".").slice(-2).join(".")}`;
+    const asF = h.psType === "As Found", asL = h.psType === "As Left";
+    let tbl, data;
     if (PT) {
-      data = `<table class="res"><thead><tr><th>Điểm</th><th>Standard Pressure<br>${esc(h.unit)}</th><th>Instrument – Rising<br>(mA)</th><th>Instrument – Falling<br>(mA)</th></tr></thead><tbody>
-        ${rec.pt.points.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x)}</td><td>${esc(rec.pt.rise[i])}</td><td>${esc(rec.pt.fall[i])}</td></tr>`).join("")}</tbody></table>`;
+      const stds = [s1, s2].filter(Boolean);
+      const j = f => stds.map(f).join("; ");
+      tbl = `<table class="dot q3"><colgroup><col style="width:15%"><col style="width:38%"><col style="width:47%"></colgroup>
+        <tr><td colspan="3">Tên phương tiện đo ${it("(Dut)")}: Thiết bị chuyển đổi áp suất ${it(`(${esc(h.description)})`)}</td></tr>
+        <tr><td colspan="2">Kiểu ${it("(Type)")}: ${it(esc(h.model))}</td><td>Tên ${it("(Tagname)")}: ${it(esc(h.tag))}</td></tr>
+        <tr><td colspan="2">Cơ sở sản xuất ${it("(Manufacturer)")}: ${it(esc(h.maker))}</td><td>Số ${it("(Serial No.)")}: ${it(esc(h.serial))}</td></tr>
+        <tr><td colspan="2">Đặc trưng kỹ thuật ${it("(Specification)")}</td><td>Phạm vi đo ${it("(Range)")}: (${it(`${esc(h.min)}÷${esc(h.max)}`)})${esc(h.unit)}</td></tr>
+        <tr><td colspan="2"></td><td>Độ chính xác ${it("(Accuracy)")}: ${it(`±${esc(h.acc)}%FS`)}</td></tr>
+        <tr><td colspan="3">Cơ sở sử dụng ${it("(Customer)")}: ${it(esc(L.custVN))}</td></tr>
+        <tr><td colspan="2">Phương pháp thực hiện ${it("(Method)")}:</td><td>${esc(h.procedure)}</td></tr>
+        <tr><td colspan="3">Chuẩn, thiết bị chính sử dụng ${it("(Standard set)")}: ${it(esc(s1 ? s1.name : ""))}</td></tr>
+        <tr><td></td><td colspan="2">Kiểu ${it("(Model)")}: ${it(esc(j(qModel)))}</td></tr>
+        <tr><td></td><td colspan="2">Số hiệu ${it("(Serial No.)")}: ${it(esc(j(s => s.serial)))}</td></tr>
+        <tr><td></td><td colspan="2">Phạm vi đo ${it("(Range)")}: ${it(esc(j(qRange)))}</td></tr>
+        <tr><td></td><td colspan="2">Độ chính xác ${it("(Accuracy)")}: ${esc(j(s => s.uncText || `${s.unc} ${s.uncUnit}`))}</td></tr>
+        <tr><td colspan="2">Điều kiện môi trường ${it("(Environment)")}:</td><td></td></tr>
+        <tr><td colspan="2" class="c">${cb(h.envOk)} &nbsp; Nhiệt độ ${it("(Ambient Temp.)")}: ${esc(S.qtgTemp)}</td><td class="c">${cb(h.envOk)} &nbsp; Độ ẩm ${it("(Humidity)")}: ${esc(S.qtgHum)}</td></tr>
+        <tr><td colspan="3">Ngày thực hiện ${it("(Calib. Date)")}: ${dVN(cal)}</td></tr>
+        <tr><td colspan="2">Số liệu và kết quả ${it("(Result)")}:</td><td class="sp2">${cb(asF)} &nbsp; AsFound <span class="gap"></span> ${cb(asL)} &nbsp; AsLeft</td></tr></table>`;
+      const pd = pDec(rec.pt.points);
+      data = `<table class="res qres"><thead>
+        <tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp chuẩn<br>${it("(Standard Input Pressure)")}<br><br>${esc(h.unit)}</th><th rowspan="2">Tín hiệu điện quy đổi<br>${it("(Ideal Output Current)")}<br>mA</th>
+          <th colspan="2">Giá trị dòng trên thiết bị<br>${it("(Measured Output Current)")}<br>mA</th><th colspan="2">Số hiệu chính<br>${it("(Correction)")}<br>mA</th></tr>
+        <tr><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th></tr></thead><tbody>
+        ${res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(r.x, pd)}</td><td>${vn(r.ideal, 3)}</td><td>${vn(r.rise, 3)}</td><td>${vn(r.fall, 3)}</td><td>${vn(r.shcR, 3)}</td><td>${vn(r.shcF, 3)}</td></tr>`).join("")}</tbody></table>`;
     } else {
-      data = `<table class="res"><thead><tr><th>Lần</th><th>Instrument – P.High<br>${esc(h.unitPset)}</th><th>Instrument – P.Low<br>${esc(h.unitPset)}</th></tr></thead><tbody>
-        ${rec.ps.high.map((v, i) => `<tr><td>${i + 1}</td><td>${esc(v)}</td><td>${esc(rec.ps.low[i])}</td></tr>`).join("")}</tbody></table>`;
+      const rising = h.dirQTG !== "Falling";
+      const mpe = num(h.acc) * num(h.pset) / 100;
+      tbl = `<table class="dot q4"><colgroup><col style="width:11%"><col style="width:42%"><col style="width:13%"><col style="width:34%"></colgroup>
+        <tr><td colspan="4">Tên đối tượng ${it("(Dut)")}: Thiết bị đặt mức áp suất ${it(`(${esc(h.description)})`)}</td></tr>
+        <tr><td colspan="2">Kiểu ${it("(Type)")}: ${it(esc(h.model))}</td><td colspan="2">Số ${it("(Tag No)")}: &nbsp;${it(esc(h.tag))}<br>Số hiệu ${it("(Serial No.)")}: ${it(esc(h.serial))}</td></tr>
+        <tr><td colspan="2">Cơ sở sản xuất ${it("(Manufacturer)")}: ${it(esc(h.maker))}</td><td colspan="2">Năm SX ${it("(Manufacture Year)")}: ${it(esc(h.mfgYear || "N/A"))}</td></tr>
+        <tr><td colspan="2">Đặc trưng kỹ thuật ${it("(Specification)")}</td><td colspan="2"></td></tr>
+        <tr><td></td><td>Áp suất đặt ${it("(Set point)")}: ${esc(h.pset)} ${esc(h.unitPset)}</td><td colspan="2">Dải làm việc ${it("(Calib Range)")}: ${it(`(${esc(h.min)}÷${esc(h.max)}) ${esc(h.unit)}`)}</td></tr>
+        <tr><td></td><td>Độ chính xác ${it("(Accuracy)")}: ${it(`±${esc(h.acc)}%.Pset`)}</td><td colspan="2">Sai số cho phép ${it("(MPE)")}: ${it(`${isFinite(mpe) ? g(mpe, 6) : ""} ${esc(h.unitPset)}`)}</td></tr>
+        <tr><td></td><td>Chế độ làm việc ${it("(Operating mode)")}:</td><td colspan="2">${cb(h.micro === "NO")} Thường mở ${it("(NO)")} <span class="gap"></span> ${cb(h.micro === "NC")} Thường đóng ${it("(NC)")}</td></tr>
+        <tr><td></td><td></td><td colspan="2">${cb(rising)} Chiều tăng ${it("(Rising)")} <span class="gap"></span> ${cb(!rising)} Chiều giảm ${it("(Falling)")}</td></tr>
+        <tr><td colspan="4">Cơ sở sử dụng ${it("(Customer)")}: ${esc(L.custVN)}</td></tr>
+        <tr><td colspan="2">Phương pháp thực hiện ${it("(Method)")}:</td><td colspan="2">${esc(h.procedure)}</td></tr>
+        <tr><td colspan="2">Chuẩn, thiết bị chính sử dụng ${it("(Standard set)")}:</td><td colspan="2">${it(esc(s1 ? s1.name : ""))}</td></tr>
+        <tr><td></td><td colspan="2">Kiểu ${it("(Model)")}: ${it(esc(qModel(s1)))}</td><td>Độ chính xác ${it("(Accuracy)")}: ${it(esc(s1 ? s1.accuracy : ""))}</td></tr>
+        <tr><td></td><td colspan="2">Số hiệu ${it("(Serial No.)")}: ${it(esc(s1 ? s1.serial : ""))}</td><td>Phạm vi đo ${it("(Range)")}: ${it(esc(qRange(s1)))}</td></tr>
+        <tr><td colspan="4">Điều kiện môi trường ${it("(Environment)")}:</td></tr>
+        <tr><td></td><td class="c">${cb(h.envOk)} Nhiệt độ ${it("(Ambient Temp.)")}: ${esc(S.qtgTemp)}</td><td colspan="2" class="c">${cb(h.envOk)} Độ ẩm ${it("(Humidity)")}: ${esc(S.qtgHum)}</td></tr>
+        <tr><td colspan="4">Người thực hiện ${it("(Calibrated by)")}: ${it(esc(rec.sig.inspector))}</td></tr>
+        <tr><td colspan="4">Ngày thực hiện ${it("(Calib. Date)")}: ${dVN(cal)}</td></tr>
+        <tr><td colspan="4">Địa điểm thực hiện ${it("(Location)")}: ${it(esc(h.calPlace || L.code || L.locVN))}</td></tr>
+        <tr><td colspan="4" class="c"><b>KẾT QUẢ HIỆU CHUẨN ${it("(RESULT)")}:</b></td></tr></table>`;
+      const pd = pDec([h.pset, ...rec.ps.set, ...rec.ps.reset]);
+      data = `<table class="res qres ps"><thead>
+        <tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp suất đặt<br>${it("(P<sub>set</sub>)")}<br><br>${esc(h.unitPset)}</th><th colspan="2">Áp suất hiển thị trên thiết bị chuẩn<br>${it("(Standard Pressure)")}</th><th rowspan="2">Chênh tác động<br>${it("(Set-deviation)")}</th><th rowspan="2">Chênh trả lại<br>${it("(Reset-deviation)")}</th></tr>
+        <tr><th>Áp tác động<br>${it("(Set-Pressure)")}</th><th>Áp trả về<br>${it("(Reset-Pressure)")}</th></tr></thead><tbody>
+        ${rec.ps.set.map((v, i) => { const sv = num(v), rv = num(rec.ps.reset[i]), ps = num(h.pset); return `<tr><td>${p2(i + 1)}</td>${i === 0 ? `<td rowspan="5">${esc(h.pset)}</td>` : ""}<td>${vn(sv, pd)}</td><td>${vn(rv, pd)}</td><td>${vn(ps - sv, pd)}</td><td>${vn(ps - rv, pd)}</td></tr>`; }).join("")}</tbody></table>`;
     }
-    return `<section class="a4">${draft(info)}
-      <div class="formcode">QTG – ${esc(rec.type)} · bản số hoá</div>
-      <h1>BIÊN BẢN HIỆU CHUẨN – SỐ LIỆU HIỆN TRƯỜNG</h1><div class="sub"><i>(Calibration field record – QTG)</i></div>
-      <table class="kv qtg">${left}</table>
-      <div class="lbl">Số liệu đo:</div>${data}
-      ${rec.h.note ? `<div class="box">Ghi chú: ${esc(rec.h.note)}</div>` : ""}
-      <div class="lbl">Kết luận sơ bộ: <b>${res.pass ? "Đạt (Pass)" : "Không đạt (Fail)"}</b></div>
-      ${sigBlock("Người kiểm tra", "(Người kiểm soát)", rec.sig.controller, "Người thực hiện", "(Kiểm định viên)", rec.sig.inspector)}
-      <div class="ftr"><span>Bản số hoá từ QTG giấy. Bố cục tạm thời – chờ mẫu QTG chuẩn (KĐHC Giàn Rồng / mẫu 2026).</span><span>QTG</span></div></section>`;
+    return `<section class="a4 qtg">${wmImg}${draft(info)}${qtgHeader(st, PT)}
+      <h1 class="q">BIÊN BẢN HIỆU CHUẨN</h1><div class="sub"><b><i>(Calibration Report)</i></b></div>
+      <div class="no">Số ${it("(N<sup>o</sup>)")}: ${esc(bb)}</div>
+      <div class="formcode">${it(esc(S.qtgForm))}</div>
+      ${tbl}${data}
+      ${h.note ? `<div class="qnote">Ghi chú: ${esc(h.note)}</div>` : ""}
+      ${qtgSig(rec)}</section>`;
   }
 
-  /* ---------------- Uncertainty calculation sheet (for the Quality Checker) ---------------- */
+  /* ================= UNCERTAINTY SHEET (for the Quality Checker) ================= */
   function uncPage(rec, res, st, info) {
     const h = rec.h, PT = rec.type === "PT";
-    const form = PT ? st.PT.form : st.PS.form;
-    const kv = (a, b, c = "") => `<tr><td>${a}</td><td class="num">${b}</td><td>${c}</td></tr>`;
+    const S = PT ? st.PT : st.PS;
+    const r3 = (ref, lab, val, unit = "") => {
+      const mono = /^[-+]?[\d.]+(e[-+]?\d+)?$|^\d+ \/ [\d.]+( \/ [\d.]+)?$/i.test(String(val).replace(/<[^>]+>/g, ""));
+      return `<tr><td class="ref">${ref}</td><td>${lab}</td>${unit ? `<td class="${mono ? "num" : "txt"}">${val}</td><td>${unit}</td>` : `<td class="${mono ? "num" : "txt"}" colspan="2">${val}</td>`}</tr>`;
+    };
     let body;
     if (PT) {
-      const s1 = info.stand1, s2 = info.stand2;
-      const top = `<table class="kv unc">
-        ${kv("Thiết bị được hiệu chuẩn (DUT)", esc(h.description), "Output 4–20 mA")}
-        ${kv("Phạm vi đo (Min / Max)", `${h.min} / ${h.max}`, esc(h.unit))}
-        ${kv("Stand1", esc(s1.key), `${s1.min}÷${s1.max} ${s1.unit} · U=${s1.unc} ${s1.uncUnit} · hệ số đổi đơn vị ×${g(res.factor1, 10)}`)}
-        ${kv("E9 / E10 Stand1 min / FS (đơn vị DUT)", `${g(res.E9)} / ${g(res.E10)}`, esc(h.unit))}
-        ${kv("E11 ĐKĐBĐ Stand1 (đơn vị DUT)", g(res.E11), esc(h.unit))}
-        ${kv("E12 ĐKĐBĐ quy đổi", g(res.E12), "%")}${kv("E13 % of Reading", g(res.E13), "%")}
-        ${kv("Stand2", esc(s2.key), `${s2.min}÷${s2.max} ${s2.unit} · U=${s2.unc} ${s2.uncUnit} · %Rdg=${s2.rdg}`)}
-        ${kv("H12 ĐKĐBĐ Stand2 quy đổi", g(res.H12), "%")}
-        ${kv("Hệ số phủ k", res.k)}${kv("Đã hiệu chỉnh áp suất (G14)", "Yes", "x dùng trực tiếp, không qua bảng Stand Correct")}
-      </table>`;
-      const cols = res.cols;
-      const hd = cols.map((c, j) => `<th>${j < cols.length / 2 ? "R" : "F"}${(j % (cols.length / 2)) + 1}</th>`).join("");
-      const row = (lab, f) => `<tr><td class="l">${lab}</td>${cols.map(c => `<td>${f(c)}</td>`).join("")}</tr>`;
-      const grid = `<table class="res tiny"><thead><tr><th class="l">Hàng</th>${hd}</tr></thead><tbody>
-        ${row("19 Standard Pressure xi", c => g(c.x))}${row("21 Standard Current (mA)", c => g(c.I))}${row("22 Instrument Yi (mA)", c => g(c.y))}
-        ${row("23 uA,i (mA)", c => g(c.uAmA, 4))}${row("24 uA,i (%)", c => g(c.uA, 4))}${row("38 us,i (%)", c => g(c.us, 4))}${row("25 Uc,i (%)", c => g(c.uc, 4))}</tbody></table>`;
-      const reg = `<table class="kv unc">
-        ${kv("F28 Hệ số b (LINEST)", g(res.b, 8))}${kv("F29 Hệ số a (LINEST)", g(res.a, 8))}
-        ${kv("F33 Sy = STEYX", g(res.Sy, 6), "mA")}${kv("F34 Sa", g(res.Sa, 6))}${kv("F35 Sb", g(res.Sb, 6))}${kv("F36 r(a,b)", g(res.r, 6))}
-        ${kv("F39 uv (Vôn/Ampe kế)", g(res.uv, 6), "%")}</table>`;
-      const out = `<table class="res"><thead><tr><th>Áp suất chuẩn</th><th>Quy đổi mA</th><th>DUT tăng</th><th>DUT giảm</th><th>SHC tăng</th><th>SHC giảm</th><th>Uc,i(tb) %</th><th>Uexp %</th><th>Uexp ${esc(h.unit)}</th></tr></thead><tbody>
-        ${res.rows.map(r => `<tr><td>${g(r.x)}</td><td>${g(r.ideal)}</td><td>${r.rise}</td><td>${r.fall}</td><td>${g(r.shcR, 4)}</td><td>${g(r.shcF, 4)}</td><td>${g(r.ucAvg, 5)}</td><td>${g(r.Upct, 5)}</td><td>${g(r.U, 6)}</td></tr>`).join("")}</tbody></table>`;
-      const judge = `<table class="kv unc">
-        ${kv("Uexp max (Data112!CZ)", g(res.Umax, 6), `${esc(h.unit)} → in chứng chỉ: ${res.UmaxText.text}`)}
-        ${kv("Giới hạn Uexp = acc% × span", g(res.limU, 6), `${esc(h.unit)} · ${res.checks.uOK ? "OK" : "VƯỢT"}`)}
-        ${kv("|SHC| max", g(res.shcMax, 4), `mA · giới hạn acc% × 16 = ${g(res.limI, 4)} mA · ${res.checks.iOK ? "OK" : "VƯỢT"}`)}
-        ${kv("Kết luận (Data112!IF)", res.pass ? "Đạt (Pass)" : "Không đạt (Fail)")}</table>`;
-      body = top + `<div class="lbl">Bảng tính từng điểm (R = Rising, F = Falling):</div>` + grid + reg + `<div class="lbl">Kết quả hiệu chuẩn:</div>` + out + judge;
+      const s1 = info.stand1, s2 = info.stand2, c = res.cols, n = c.length / 2;
+      const inp = `<div class="ucols"><table class="ukv">
+          ${r3("E5", "Thiết bị được hiệu chuẩn (DUT), output 4–20 mA", esc(h.description))}
+          ${r3("E6", "Phạm vi đo (Min range)", esc(h.min), esc(h.unit))}${r3("E7", "Phạm vi đo (Max range)", esc(h.max), esc(h.unit))}
+          ${r3("E8", "Thiết bị áp suất chuẩn (Stand1)", esc(s1.key))}
+          ${r3("E9", "Stand1 Min range (đổi đơn vị ×" + g(res.factor1, 8) + ")", g(res.E9), esc(h.unit))}
+          ${r3("E10", "Stand1 Full Scale", g(res.E10), esc(h.unit))}${r3("E11", "ĐKĐBĐ Stand1 (Uncer)", g(res.E11), esc(h.unit))}
+          ${r3("E12", "ĐKĐBĐ quy đổi", g(res.E12), "%")}${r3("E13", "% of Reading", g(res.E13), "%")}
+          ${r3("E14,E16", "Hệ số phủ k chuẩn / k (P=95%)", `2 / ${res.k}`)}${r3("E17", "Số điểm hiệu chuẩn", n)}
+          ${r3("G14", "Hiệu chỉnh P (Stand Correct)", "Yes", "dùng trực tiếp xi")}
+        </table><table class="ukv">
+          ${r3("H8", "Chuẩn điện (Stand2)", esc(s2.key))}${r3("H9", "Min Range", g(res.H9), s2.unit)}${r3("H10", "Max Range", g(res.H10), s2.unit)}
+          ${r3("H11", "Uncer", g(s2.unc), esc(s2.uncUnit))}${r3("H12", "ĐKĐBĐ quy đổi", g(res.H12), "%")}${r3("H13", "Sai số (Error)", g(res.H13), s2.unit)}
+          ${r3("J8", "Loại chuẩn", esc(s1.name))}${r3("", "Hạn HC Stand1 / Stand2", `${esc(s1.due || "?")} / ${esc(s2.due || "?")}`)}
+        </table></div>`;
+      const hd = c.map((_, j) => `<th>${j < n ? "R" : "F"}${(j % n) + 1}</th>`).join("");
+      const row = (ref, lab, f) => `<tr><td class="ref">${ref}</td><td class="l">${lab}</td>${c.map(x => `<td>${f(x)}</td>`).join("")}</tr>`;
+      const grid = `<table class="res ug"><thead><tr><th class="ref">Hàng</th><th class="l">Đại lượng</th>${hd}</tr></thead><tbody>
+        ${row("19", "Standard Pressure (xi)", x => g(x.x))}${row("20", "Correct Pressure (xi)", x => g(x.x))}${row("21", "Standard Current (mA)", x => g(x.I))}
+        ${row("22", "Instrument Yi (mA)", x => g(x.y))}${row("23", "u<sub>A,i</sub> (mA)", x => g(x.uAmA, 4))}${row("24", "u<sub>A,i</sub> (%)", x => g(x.uA, 4))}
+        ${row("38", "u<sub>s,i</sub> chuẩn (%)", x => g(x.us, 4))}${row("25", "U<sub>c,i</sub> (%)", x => g(x.uc, 4))}</tbody></table>`;
+      const reg = `<div class="ucols"><table class="ukv">
+          ${r3("F28", "1. Hệ số b = LINEST", g(res.b, 8))}${r3("F29", "Hệ số a = LINEST", g(res.a, 8))}
+          ${r3("F33", "2.1 Sy = STEYX", g(res.Sy, 6), "mA")}${r3("F34", "Sa = Sy·√(L34/M34/K34)", g(res.Sa, 6))}
+          ${r3("F35", "Sb = Sy·√(1/K34)", g(res.Sb, 6))}${r3("F36", "r(a,b) = −N34/√(M34·L34)", g(res.r, 6))}
+        </table><table class="ukv">
+          ${r3("K34", "DEVSQ Σ(xi−xtb)²", g(res.K34))}${r3("L34", "SUMSQ Σxi²", g(res.L34))}${r3("M34/N34", "COUNT n / SUM Σxi", `${res.M34} / ${g(res.N34)}`)}
+          ${r3("F39", "2.2.2 uv Vôn/Ampe kế", g(res.uv, 6), "%")}${r3("F41", "3. Uc tổng hợp lớn nhất", g(res.F41, 6), "%")}${r3("F42", "4. Uexp tương đối = E16·F41", g(res.F42, 6), "%")}
+        </table></div>`;
+      const pd = pDec(rec.pt.points);
+      const out = `<table class="res ug"><thead><tr><th>Áp suất chuẩn<br>B46</th><th>Quy đổi mA<br>C46</th><th>DUT tăng<br>D46</th><th>DUT giảm<br>E46</th><th>SHC tăng<br>F46</th><th>SHC giảm<br>G46</th><th>SHC TB<br>H46</th><th>Uc,i(tb) %<br>I46</th><th>Uexp ${esc(h.unit)}<br>J46</th><th>Uexp %<br>K46</th><th>In CC<br>${esc(h.unit)}</th></tr></thead><tbody>
+        ${res.rows.map(r => `<tr><td>${g(r.x)}</td><td>${g(r.ideal)}</td><td>${r.rise}</td><td>${r.fall}</td><td>${g(r.shcR, 4)}</td><td>${g(r.shcF, 4)}</td><td>${g(r.shcAvg, 4)}</td><td>${g(r.ucAvg, 6)}</td><td>${g(r.U, 6)}</td><td>${g(r.Upct, 6)}</td><td><b>${vn(C.u3(r.U), 3)}</b></td></tr>`).join("")}</tbody></table>`;
+      const ratioI = res.shcMax / res.limI, ratioU = res.Umax / res.limU;
+      const chk = `<table class="res ug chk"><thead><tr><th>Max |SHC| (mA)</th><th>Giới hạn SHC = acc%×16</th><th>SHC / giới hạn</th><th>U lớn nhất (${esc(h.unit)})</th><th>Giới hạn U = acc%×span</th><th>U / giới hạn</th><th>Kết luận</th></tr></thead>
+        <tbody><tr><td>${g(res.shcMax, 4)}</td><td>${g(res.limI, 4)}</td><td class="${ratioI > 1 ? "bad" : ""}">${(ratioI * 100).toFixed(1)}%</td><td>${g(res.Umax, 6)}</td><td>${g(res.limU, 6)}</td><td class="${ratioU > 1 ? "bad" : ""}">${(ratioU * 100).toFixed(1)}%</td><td><b>${res.pass ? "Đạt (Pass)" : "Không đạt (Fail)"}</b></td></tr></tbody></table>
+        <div class="unote">Giá trị in trên chứng chỉ: y = ${vn(res.a, 3)} + ${vn(res.b, 3)} x · U<sub>exp-max</sub> = ${vn(C.u3(res.Umax), 3)} ${esc(h.unit)} (Data112!CZ làm tròn 4 số rồi in 3 số lẻ).</div>`;
+      body = inp + `<div class="ulbl">Bảng tính theo điểm (R = Rising, F = Failing) – hàng Excel 19–25, 38:</div>` + grid + reg
+        + `<div class="ulbl">Kết quả hiệu chuẩn (hàng 44–50):</div>` + out + `<div class="ulbl">Kiểm tra (sheet "Kiểm tra"):</div>` + chk;
     } else {
       const s1 = info.stand1;
-      const rows = res.hi.map((v, i) => `<tr><td>${i + 1}</td><td>${i === 0 ? h.pset : ""}</td><td>${v}</td><td>${res.lo[i]}</td><td>${g(res.G[i], 5)}</td><td>${g(res.H[i], 5)}</td></tr>`).join("");
-      body = `<table class="kv unc">
-        ${kv("Thiết bị được hiệu chuẩn (DUT)", esc(h.description))}${kv("E6 Độ chính xác", h.acc, "% Pset")}
-        ${kv("E7 Giá trị đặt Pset", h.pset, esc(h.unitPset))}${kv("I7 Hiệu chỉnh áp suất", "Yes")}
-        ${kv("E8 Độ chia nhỏ nhất thước đặt mức", h.resolution || 0, esc(h.unitPset))}
-        ${kv("E9 Chiều tác động (tự xác định)", res.dir, `QTG ghi: ${esc(h.dirQTG || "")}`)}
-        ${kv("Stand1", esc(s1.key), `${s1.min}÷${s1.max} ${s1.unit} · U=${s1.unc} ${s1.uncUnit} · hệ số đổi ×${g(res.factor1, 10)}`)}
-        ${kv("E11 / E12 Stand min / Full scale", `${g(res.E11)} / ${g(res.E12)}`, esc(h.unitPset))}
-        ${kv("E13 ĐKĐBĐ chuẩn", g(res.E13), esc(h.unitPset))}${kv("E14 ĐKĐBĐ quy đổi", g(res.E14), "%")}${kv("G14 % of Rdg", g(res.G14), "%")}
-        ${kv("E16 k chuẩn / E17 n / E18 k Student", `2 / 5 / ${res.k}`)}</table>
-        <table class="res"><thead><tr><th>Lần</th><th>Pset</th><th>Pm (P.High)</th><th>Pđ (P.Low)</th><th>DPcm = Pset−Pm</th><th>DPcđ = Pset−Pđ</th></tr></thead><tbody>${rows}</tbody></table>
-        <table class="kv unc">
-        ${kv("F28 Pm trung bình", g(res.F28, 8))}${kv("F29 Pđ trung bình", g(res.F29, 8))}
-        ${kv("F26 uA áp suất mở", g(res.F26, 6))}${kv("F27 uA áp suất đóng", g(res.F27, 6))}
-        ${kv("F31 uB chuẩn", g(res.F31, 6))}${kv("F32 uB độ phân giải", g(res.F32, 6))}
-        ${kv("F34 / F35 uc mở / đóng", `${g(res.F34, 6)} / ${g(res.F35, 6)}`)}
-        ${kv("F37 / F38 U mở / đóng (k=2)", `${g(res.F37, 6)} / ${g(res.F38, 6)}`)}
-        ${kv("I42 U báo cáo", g(res.U, 6), `${esc(h.unitPset)} → in chứng chỉ: ${res.Utext.text}`)}
-        ${kv("J42 max|Set-dev| + U", g(res.J42, 6))}${kv("K42 Giới hạn acc% × Pset", g(res.K42, 6))}
-        ${kv("D47 Kết luận", res.pass ? "Đạt (Pass)" : "Không đạt (Fail)")}</table>`;
+      const inp = `<div class="ucols"><table class="ukv">
+          ${r3("E5", "Thiết bị được hiệu chuẩn (DUT)", esc(h.description))}${r3("E6", "Độ chính xác (Accuracy)", esc(h.acc), "%")}
+          ${r3("E7", "Giá trị đặt (Pset)", esc(h.pset), esc(h.unitPset))}${r3("I7", "Hiệu chỉnh áp suất", "Yes")}
+          ${r3("E8", "Độ chia nhỏ nhất thước đặt mức", esc(h.resolution || 0), esc(h.unitPset))}
+          ${r3("E9", "Chiều tác động (tự xác định)", res.dir, `QTG: ${esc(h.dirQTG || "")}`)}
+          ${r3("E16–18", "k chuẩn / n / k Student", `2 / 5 / ${res.k}`)}
+        </table><table class="ukv">
+          ${r3("E10", "Thiết bị áp suất chuẩn (Stand1)", esc(s1.key))}${r3("G10", "Loại chuẩn", esc(s1.name))}
+          ${r3("E11", "Min range (đổi ×" + g(res.factor1, 8) + ")", g(res.E11), esc(h.unitPset))}${r3("E12", "Full Scale", g(res.E12), esc(h.unitPset))}
+          ${r3("E13", "ĐKĐBĐ (Uncer)", g(res.E13), esc(h.unitPset))}${r3("E14", "ĐKĐBĐ quy đổi", g(res.E14), "%")}${r3("G14", "% of Rdg", g(res.G14), "%")}
+          ${r3("", "Hạn HC Stand1", esc(s1.due || "?"))}
+        </table></div>`;
+      const rows = res.hi.map((v, i) => `<tr><td>${i + 1}</td><td>${i === 0 ? esc(h.pset) : ""}</td><td>${v}</td><td>${res.lo[i]}</td><td>${g(res.G[i], 6)}</td><td>${g(res.H[i], 6)}</td><td>${g((v - res.F28) ** 2, 6)}</td><td>${g((res.lo[i] - res.F29) ** 2, 6)}</td></tr>`).join("");
+      const grid = `<table class="res ug"><thead><tr><th>Lần<br>A</th><th>Pset<br>B</th><th>Pm Rising<br>C/E</th><th>Pđ Falling<br>D/F</th><th>DPcm = Pset−Pm<br>G</th><th>DPcđ = Pset−Pđ<br>H</th><th>(Pm−Pm tb)²<br>K</th><th>(Pđ−Pđ tb)²<br>L</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const calc = `<div class="ucols"><table class="ukv">
+          ${r3("F28", "Pm trung bình", g(res.F28, 8))}${r3("F29", "Pđ trung bình", g(res.F29, 8))}
+          ${r3("F26", "8.1 uA áp suất mở", g(res.F26, 6))}${r3("F27", "uA áp suất đóng", g(res.F27, 6))}
+          ${r3("F31", "8.2 uB của chuẩn", g(res.F31, 6))}${r3("F32", "uB độ phân giải = E8/2", g(res.F32, 6))}
+        </table><table class="ukv">
+          ${r3("F34", "8.3 uc AS mở", g(res.F34, 6))}${r3("F35", "uc AS đóng", g(res.F35, 6))}
+          ${r3("F37", "8.4 U mở = E18·F34", g(res.F37, 6))}${r3("F38", "U đóng = E18·F35", g(res.F38, 6))}
+          ${r3("I42", "U báo cáo (theo chiều " + res.dir + ")", g(res.U, 6), esc(h.unitPset))}${r3("", "In chứng chỉ (làm tròn lên)", `<b>${vnTxt(res.Utext.text)}</b>`, esc(h.unitPset))}
+        </table></div>`;
+      const pd = pDec([h.pset, ...rec.ps.set, ...rec.ps.reset]);
+      const out = `<table class="res ug"><thead><tr><th>Lần<br>C42</th><th>Pset<br>D42</th><th>Set<br>E42</th><th>Reset<br>F42</th><th>Set-deviation<br>G42</th><th>Reset-deviation<br>H42</th></tr></thead><tbody>
+        ${res.set.map((v, i) => `<tr><td>${i + 1}</td><td>${i === 0 ? esc(h.pset) : ""}</td><td>${vn(v, pd)}</td><td>${vn(res.reset[i], pd)}</td><td>${vn(res.setDev[i], pd)}</td><td>${vn(res.resetDev[i], pd)}</td></tr>`).join("")}</tbody></table>`;
+      const maxDev = Math.max(...res.setDev.map(Math.abs)), ratio = res.J42 / res.K42;
+      const chk = `<table class="res ug chk"><thead><tr><th>Tác động</th><th>Sai số cho phép (MPE) = acc%×Pset</th><th>Max |ΔPset|</th><th>U (k=2)</th><th>|Δ| + U (J42)</th><th>(|Δ|+U) / MPE</th><th>Kết luận (D47)</th></tr></thead>
+        <tbody><tr><td>${res.dir}</td><td>${g(res.K42, 6)}</td><td>${g(maxDev, 6)}</td><td>${g(res.U, 6)}</td><td>${g(res.J42, 6)}</td><td class="${ratio > 1 ? "bad" : ""}">${(ratio * 100).toFixed(1)}%</td><td><b>${res.pass ? "Đạt (Pass)" : "Không đạt (Fail)"}</b></td></tr></tbody></table>`;
+      body = inp + `<div class="ulbl">Số liệu đo (hàng 20–24):</div>` + grid + calc + `<div class="ulbl">Kết quả hiệu chuẩn (hàng 42–46):</div>` + out + `<div class="ulbl">Kiểm tra (sheet "Kiểm tra"):</div>` + chk;
     }
-    return `<section class="a4">${draft(info)}
-      <div class="formcode">${esc(form)}</div>
-      <h1 class="sm">BẢNG TÍNH TOÁN ĐỘ KHÔNG ĐẢM BẢO ĐO CỦA PHÉP HIỆU CHUẨN</h1>
-      <div class="sub">No.: ${esc(rec.certNo)} · Tag: ${esc(h.tag)} · ${PT ? "Pressure transmitter Uncertainty Calculation Report" : "Uncertainty Calculation Form"}</div>
+    return `<section class="a4 unc">${draft(info)}
+      <div class="uhead"><div><b>BẢNG TÍNH TOÁN ĐỘ KHÔNG ĐẢM BẢO ĐO CỦA PHÉP HIỆU CHUẨN</b><br>No.: ${esc(rec.certNo)} · Tag: <b>${esc(h.tag)}</b> · ${dVN(toDate(h.calDate))}<br>${it(PT ? "Pressure transmitter Uncertainty Calculation Report – DLVN112-2002_Rev2" : "Uncertainty Calculation Form – DLVN133 - 2004")}</div><div class="fc">${esc(S.form)}</div></div>
       ${body}
-      ${sigBlock("Người kiểm tra", "(Quality Checker)", rec.sig.controller, "Người thực hiện", "(Kiểm định viên)", rec.sig.inspector)}
-      <div class="ftr"><span>Tính theo logic ${PT ? "DLVN112-2002_Rev2" : "DLVN133 - 2004"} (file Uncer Form 2024). Ô Excel ghi kèm để đối chiếu.</span><span>ĐKĐBĐ</span></div></section>`;
+      <table class="qsig u"><tr><td><b>Người kiểm tra</b><br>${it("(Quality Checker)")}</td><td><b>Người thực hiện</b><br>${it("(Calibrated by)")}</td></tr>
+        <tr class="sp"><td></td><td></td></tr><tr><td><b>${esc(rec.sig.controller)}</b></td><td><b>${esc(rec.sig.inspector)}</b></td></tr></table>
+      <div class="ufoot">Công thức và ô Excel theo file ${PT ? "PT_DGCP_10_2026.xls" : "PS_DGCP_10_2026.xls"} (macro khainv). Đối chiếu 2026-10-29: ${PT ? "31/31" : "13/13"} thiết bị DGCP trùng khớp.</div></section>`;
   }
 
-  window.LabDocs = { certPage1, certPage2, qtgPage, uncPage, dVN, dEN, toDate, esc };
+  /* ================= QC LIST (sheet "Kiểm tra", many records) ================= */
+  function qcPages(type, items, st) {
+    const PT = type === "PT", per = 26, pages = [];
+    for (let p = 0; p < items.length; p += per) {
+      const chunk = items.slice(p, p + per);
+      const rows = chunk.map(({ rec, res }, i) => {
+        const h = rec.h;
+        if (PT) {
+          const rI = res.shcMax / res.limI;
+          return `<tr><td>${p + i + 1}</td><td>${esc(rec.certNo.split(".").pop())}</td><td class="l">${esc(h.tag)}</td><td>${esc(h.model)}</td><td>${esc(h.min)}–${esc(h.max)} ${esc(h.unit)}</td><td class="l">${esc(rec.s1key)}</td><td class="l">${esc(rec.s2key)}</td><td>${esc(h.calDate)}</td><td>${g(res.shcMax, 3)}</td><td>${g(res.limI, 3)}</td><td class="${rI > 1 ? "bad" : ""}">${(rI * 100).toFixed(0)}%</td><td>${vn(C.u3(res.Umax), 3)}</td><td>${g(res.limU, 4)}</td><td class="${res.pass ? "" : "bad"}">${res.pass ? "Đạt" : "Không đạt"}</td></tr>`;
+        }
+        const md = Math.max(...res.setDev.map(Math.abs)), rr = res.J42 / res.K42;
+        return `<tr><td>${p + i + 1}</td><td>${esc(rec.certNo.split(".").pop())}</td><td class="l">${esc(h.tag)}</td><td>${esc(h.pset)}</td><td>${esc(h.unitPset)}</td><td>${res.dir}</td><td>${g(res.K42, 4)}</td><td class="l">${esc(rec.s1key)}</td><td>${esc(h.calDate)}</td><td>${g(md, 4)}</td><td>${esc(res.Utext.text)}</td><td>${g(res.J42, 4)}</td><td class="${rr > 1 ? "bad" : ""}">${(rr * 100).toFixed(0)}%</td><td class="${res.pass ? "" : "bad"}">${res.pass ? "Đạt" : "Không đạt"}</td></tr>`;
+      }).join("");
+      const head = PT
+        ? `<tr><th>TT</th><th>Số BB</th><th>Tag</th><th>Model</th><th>Phạm vi đo</th><th>Chuẩn áp suất</th><th>Chuẩn điện</th><th>Ngày HC</th><th>Max |SHC| (mA)</th><th>Giới hạn SHC</th><th>SHC / GH</th><th>U lớn nhất</th><th>Giới hạn U</th><th>Kết luận</th></tr>`
+        : `<tr><th>TT</th><th>Số BB</th><th>Tag</th><th>Pset</th><th>Đơn vị</th><th>Tác động</th><th>MPE</th><th>Chuẩn</th><th>Ngày HC</th><th>Max |ΔPset|</th><th>U (k=2)</th><th>|Δ| + U</th><th>(|Δ|+U)/MPE</th><th>Kết luận</th></tr>`;
+      pages.push(`<section class="a4 unc qcl"><div class="uhead"><div><b>BẢNG KIỂM TRA KẾT QUẢ HIỆU CHUẨN ${PT ? "PRESSURE TRANSMITTER" : "PRESSURE SWITCH"}</b><br>${items.length} hồ sơ · trang ${pages.length + 1}/${Math.ceil(items.length / per)}</div><div class="fc">Kiểm tra</div></div>
+        <table class="res ug qct"><thead>${head}</thead><tbody>${rows}</tbody></table>
+        <div class="ufoot">Lập từ dữ liệu app theo sheet "Kiểm tra" của ${PT ? "PT" : "PS"}_DGCP_10_2026.xls.</div></section>`);
+    }
+    return pages.join("");
+  }
+
+  window.LabDocs = { certPage1, certPage2, qtgPage, uncPage, qcPages, dVN, dEN, toDate, esc, vn };
 })();

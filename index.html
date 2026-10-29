@@ -100,46 +100,102 @@ nav.tabs button.on{color:var(--clay)}
 #rq{margin-bottom:4px}
 @media (max-width:380px){.grid{grid-template-columns:1fr}.chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-/* ---------- A4 document pages (always light, Times-like) ---------- */
+/* ---------- A4 document pages (always light, Times) – 2026 templates ---------- */
 #render{position:fixed;left:-20000px;top:0;width:794px}
-section.a4{position:relative;width:794px;height:1123px;background:#fff;color:#000;padding:44px 62px 60px 70px;font:14px/1.35 "Times New Roman",Tinos,"Liberation Serif",serif;overflow:hidden;margin:0 0 12px}
-.a4 h1{font:700 22px "Times New Roman",Tinos,serif;color:#1530b8;text-align:center;margin:6px 0 0;letter-spacing:.3px}
-.a4 h1.sm{font-size:17px;color:#000}
-.a4 .sub{text-align:center;font-size:13.5px}
-.a4 .no{text-align:center;font-size:13.5px;margin-bottom:14px}
+section.a4{position:relative;width:794px;height:1123px;background:#fff;color:#000;font:14px/1.3 "Times New Roman",Tinos,"Liberation Serif",serif;overflow:hidden;margin:0 0 12px;box-sizing:border-box}
+section.a4>*{position:relative;z-index:1}
+.a4 i{font-style:italic}
+.a4 .red{color:#e00000}
 .a4 .c{text-align:center}
-.a4 .hdr{display:flex;gap:12px;align-items:center;border-bottom:1.5px solid #1530b8;padding-bottom:6px;margin-bottom:8px}
-.a4 .hdr img{height:58px}
-.a4 .hdr-t{font-size:12px;line-height:1.3;color:#1530b8}
-.a4 .hdr-t .b{font-weight:700;font-size:13px}
-.a4 .hdr-space{height:78px}
-.a4 table.kv{width:100%;border-collapse:collapse;margin:2px 0}
-.a4 table.kv td{vertical-align:top;padding:3px 4px}
-.a4 table.kv td:first-child{width:36%}
-.a4 table.kv.std td:first-child{padding-left:22px}
-.a4 table.kv.std td{width:32%}
-.a4 table.kv.qtg td:first-child{width:34%;color:#333}
-.a4 table.kv.qtg td{border-bottom:1px dotted #aaa}
-.a4 table.kv.unc td{border-bottom:1px dotted #bbb;font-size:12.5px;padding:2px 4px}
-.a4 table.kv.unc td.num{font-family:"Courier New",monospace;width:22%}
-.a4 .lbl{margin:8px 0 3px}
-.a4 .issue{text-align:right;margin:14px 20px 4px 0;text-align:center;width:48%;margin-left:auto}
-.a4 .red{color:#c00000}
-.a4 table.sig{width:100%;margin-top:10px;text-align:center}
-.a4 table.sig td{width:50%;vertical-align:top}
-.a4 .sp{height:82px}
-.a4 .tagline{display:flex;justify-content:space-between;margin:10px 0 6px}
-.a4 table.res{width:100%;border-collapse:collapse;text-align:center;font-size:13px}
-.a4 table.res th,.a4 table.res td{border:1px solid #000;padding:3px 4px}
-.a4 table.res th{font-weight:400}
-.a4 table.res.tiny{font-size:11px}
+.a4 .wmimg{position:absolute;z-index:0;left:115px;top:300px;width:564px;opacity:.95}
+.a4 .draft{position:absolute;top:10px;left:0;right:0;text-align:center;font:700 13px Arial,sans-serif;color:#c00000;letter-spacing:.5px;z-index:3}
+.a4 .cb{display:inline-block;width:11px;height:11px;border:1px solid #000;vertical-align:-1px;position:relative;background:#fff}
+.a4 .cb.on::after{content:"✓";position:absolute;left:0;top:-4px;font:700 13px Arial,sans-serif}
+.a4 .gap{display:inline-block;width:34px}
+/* certificate */
+.a4.cert{padding:36px 58px 0 56px}
+.a4.cert .frame{position:absolute;z-index:2;left:30px;right:30px;top:30px;bottom:30px;border:4px double #1d4ea8;pointer-events:none}
+.a4 .chdr{display:flex;align-items:center;gap:14px;padding:10px 0 6px 18px;color:#1d4ea8}
+.a4 .chdr img{width:96px}
+.a4 .chdr .nologo{width:96px;height:80px}
+.a4 .chdr .t{flex:1;text-align:center;font-size:14.5px;line-height:1.3}
+.a4 .chdr .b{font-weight:700}
+.a4 .chdr .i{font-style:italic}
+.a4 .crule{border-top:1.4px solid #1d4ea8;margin:0 -28px 0 -26px}
+.a4.cert h1{font:700 22px "Times New Roman",Tinos,serif;color:#2b3f8f;text-align:center;margin:14px 0 0;letter-spacing:.2px}
+.a4.cert h1.r{margin-top:74px}
+.a4 .sub{text-align:center;font-size:14px}
+.a4 .no{text-align:center;font-size:14px;margin-bottom:6px}
+.a4 table.ckv{width:100%;border-collapse:collapse}
+.a4 table.ckv td{vertical-align:top;padding:2px 0 3px}
+.a4 table.ckv td:first-child{width:39%;padding-right:8px}
+.a4 table.ckv.std td:first-child{padding-left:30px;width:39%}
+.a4 table.ckv.std td{width:30.5%}
+.a4 table.ckv.std.one td+td{width:61%}
+.a4 .sm{font-size:13px}
+.a4 .issue{width:50%;margin:8px 0 0 auto;text-align:center}
+.a4 table.csig{width:100%;border-collapse:collapse;text-align:center;margin-top:4px}
+.a4 table.csig td{width:50%;vertical-align:top;padding:0}
+.a4 table.csig tr.sp td{height:92px;vertical-align:middle;text-align:left}
+.a4 table.csig.two tr.sp td{height:100px}
+.a4 .accr{width:136px;margin-left:-26px}
+.a4 table.cftr{position:absolute;left:34px;right:34px;bottom:34px;border-collapse:collapse;font-size:11px;line-height:1.25;width:auto}
+.a4 table.cftr td{border-top:1px solid #000;padding:4px 6px;vertical-align:top}
+.a4 table.cftr td.pg{width:84px;white-space:nowrap;border-right:1px solid #000;text-align:left;padding-left:8px}
+.a4 .tagline{display:flex;gap:40px;margin:14px 0 6px 14px}
+.a4 table.res{width:100%;border-collapse:collapse;text-align:center;font-size:13.5px}
+.a4 table.res th,.a4 table.res td{border:1px solid #000;padding:2px 3px}
+.a4 table.res th{font-weight:400;line-height:1.2}
 .a4 table.res td.l,.a4 table.res th.l{text-align:left}
-.a4 .box{border:1px solid #000;border-top:0;padding:6px 8px;font-size:13px}
-.a4 .box p{margin:3px 0} .a4 .box ul{margin:2px 0;padding-left:22px}
-.a4 .ftr{position:absolute;left:70px;right:62px;bottom:22px;display:flex;justify-content:space-between;gap:16px;font-size:10.5px;font-style:italic;color:#333;border-top:1px solid #999;padding-top:4px}
-.a4 .wm{position:absolute;left:0;right:0;top:40%;text-align:center;transform:rotate(-35deg);font:700 30px "Times New Roman",serif;color:rgba(230,120,60,.13);line-height:4;pointer-events:none}
-.a4 .draft{position:absolute;top:14px;left:0;right:0;text-align:center;font:700 13px Arial,sans-serif;color:#c00000;letter-spacing:.5px}
-.a4 .formcode{text-align:right;font-size:12px}
+.a4 table.cres td{padding:3px}
+.a4 .box{border:1px solid #000;border-top:0;padding:4px 8px;font-size:14px}
+.a4 .box p{margin:2px 0}
+.a4 .box .l{display:block;text-align:left}
+.a4 ul.dash{margin:1px 0;padding-left:44px;list-style:none}
+.a4 ul.dash li{position:relative}
+.a4 ul.dash li::before{content:"-";position:absolute;left:-22px}
+/* QTG */
+.a4.qtg{padding:34px 56px 0 64px}
+.a4 .qhdr{display:flex;align-items:center;gap:10px}
+.a4 .qhdr img{width:94px}
+.a4 .qhdr .nologo{width:94px;height:80px}
+.a4 .qhdr .t{flex:1;text-align:center;font-size:15px;line-height:1.32}
+.a4 .qhdr .b{font-weight:700}.a4 .qhdr .u{text-decoration:underline}
+.a4.qtg h1.q{font:700 16.5px "Times New Roman",Tinos,serif;text-align:center;margin:18px 0 0}
+.a4.qtg .sub,.a4.qtg .no{font-size:14.5px;margin:0}
+.a4 .formcode{text-align:right;font-size:14px;margin:2px 0 6px}
+.a4 table.dot{width:100%;border-collapse:collapse;font-size:13.6px;table-layout:fixed}
+.a4 table.dot td{border:1px dotted #000;padding:1px 4px;vertical-align:top;line-height:1.25}
+.a4 table.dot td.sp2{word-spacing:2px}
+.a4 table.qres{border-top:0}
+.a4 table.qres th{font-size:13px}
+.a4 table.qres td{height:20px}
+.a4 .qnote{font-size:13px;margin-top:4px}
+.a4 table.qsig{width:100%;text-align:center;margin-top:10px;border-collapse:collapse}
+.a4 table.qsig td{width:50%;vertical-align:top}
+.a4 table.qsig tr.sp td{height:92px}
+.a4 table.qsig.u tr.sp td{height:58px}
+/* uncertainty sheet */
+.a4.unc{padding:34px 40px 0 44px;font-size:12px;line-height:1.25}
+.a4 .uhead{display:flex;justify-content:space-between;gap:10px;border-bottom:1.5px solid #000;padding-bottom:4px;margin-bottom:6px;font-size:13px}
+.a4 .uhead .fc{font-size:12px;white-space:nowrap}
+.a4 .ucols{display:flex;gap:12px;align-items:flex-start}
+.a4 table.ukv{flex:1;border-collapse:collapse;font-size:11.4px;table-layout:fixed;width:50%}
+.a4 table.ukv td:nth-child(1){width:50px}.a4 table.ukv td:nth-child(2){width:41%}.a4 table.ukv td:nth-child(4){width:40px}
+.a4 table.ukv td.txt{text-align:right}
+.a4 table.ukv td.num[colspan]{padding-right:44px}
+.a4 table.ukv td{border-bottom:1px dotted #999;padding:1.5px 3px;vertical-align:top}
+.a4 table.ukv td.ref,.a4 table.ug .ref{font:10.5px "Courier New",monospace;color:#555;white-space:nowrap}
+.a4 table.ukv td.num{font-family:"Courier New",monospace;text-align:right;overflow-wrap:anywhere}
+.a4 .ulbl{font-weight:700;margin:7px 0 3px}
+.a4 table.ug{font-size:11px}
+.a4 table.ug th{font-size:10.5px;background:#f2f2f2}
+.a4 table.ug td{font-family:"Courier New",monospace;font-size:10.8px;padding:2px}
+.a4 table.ug td.l{font-family:"Times New Roman",serif}
+.a4 table.ug td.bad{color:#c00000;font-weight:700}
+.a4 table.qct td{font-size:10.4px}
+.a4 .unote{font-size:11.5px;margin-top:3px}
+.a4 .ufoot{position:absolute;left:44px;right:40px;bottom:20px;font-size:10px;color:#444;border-top:1px solid #999;padding-top:3px;font-style:italic}
 @media print{
   body *{visibility:hidden}
   #preview, #preview *{visibility:visible}
