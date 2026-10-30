@@ -155,6 +155,30 @@
     const parts = list.filter(([s]) => s).map(([s, unit, sample]) => { const d = standDec(s, unit, sample); return d == null ? `${s.key}: không giới hạn (không có màn hình / chưa có số liệu)` : d < 0 ? `${s.key}: KHÔNG hiển thị được ${unit}` : `${s.key}: tối đa ${d} chữ số thập phân (${unit}${s.steps ? ", tuỳ thang đo" : ""})`; });
     return parts.length ? `<div class="hint wide">Số đọc chuẩn – ${parts.map(esc).join(" · ")}</div>` : "";
   }
+  /* Chuẩn có phù hợp với thiết bị cần KĐHC không (yêu cầu 30/10/2026):
+   * 1) dải chuẩn phải phủ hết dải cần đo (VD làm thiết bị 0–30 mà chọn chuẩn 0–15 là không đủ dải);
+   * 2) độ KĐBĐ của chuẩn (quy về đơn vị thiết bị, tại điểm lớn nhất) phải nhỏ so với sai số cho phép (MPE) của thiết bị
+   *    (VD chuẩn 0–1000 dùng cho thiết bị 0–30). Ngưỡng tỉ số U/MPE = settings.turMax (mặc định 1/3) – chỉ cảnh báo. */
+  function stdU(s, unit, v) {
+    if (s.kind === "p") { const f = C.factor(s.uncUnit && s.uncUnit !== "%" ? s.uncUnit : s.unit, unit); return (s.uncUnit === "%" ? (s.unc || 0) / 100 * Math.abs(v) : (s.unc || 0) * f) + (s.rdg || 0) / 100 * Math.abs(v); }
+    return s.uncUnit === "%" ? (s.unc || 0) / 100 * Math.abs(v) : (s.unc || 0);
+  }
+  function suit(s, unit, lo, hi, mpe, lab, W) {
+    if (!s || !isFinite(lo) || !isFinite(hi)) return;
+    const f = s.kind === "p" ? C.factor(s.unit, unit) : 1; if (!isFinite(f)) return;
+    const smin = s.min * f, smax = (s.kind === "e" && s.certRange ? s.certRange : s.max) * f, r = x => C.xround(x, 6);
+    if (lo < smin - 1e-9 * Math.max(1, Math.abs(smin)) || hi > smax + 1e-9 * Math.max(1, Math.abs(smax)))
+      W.push(`${lab} ${s.key}: dải chuẩn (${r(smin)}÷${r(smax)}) ${unit} KHÔNG ĐỦ để phủ dải cần đo (${r(lo)}÷${r(hi)}) ${unit} – chọn chuẩn dải lớn hơn`);
+    if (!(mpe > 0) || s.name === "Deadweight Tester" && !s.unc) return;
+    const U = stdU(s, unit, Math.max(Math.abs(lo), Math.abs(hi))), q = U / mpe, lim = Number(settings.turMax) || 1 / 3;
+    if (q >= 1) W.push(`${lab} ${s.key}: U chuẩn ≈ ${r(U)} ${unit} ≥ sai số cho phép của thiết bị ${r(mpe)} ${unit} – chuẩn KHÔNG đủ chính xác, phải đổi chuẩn dải nhỏ / chính xác hơn`);
+    else if (q > lim) W.push(`${lab} ${s.key}: U chuẩn ≈ ${r(U)} ${unit} = ${(q * 100).toFixed(0)}% sai số cho phép ${r(mpe)} ${unit} (vượt ngưỡng 1/${C.xround(1 / lim, 1)}) – nên chọn chuẩn dải nhỏ / chính xác hơn`);
+  }
+  // Temperature work with a low (≤150 °C) and a high standard: each covers its own part of the range
+  function suitT(s1, s2, mn, mx, mpe, W) {
+    if (s2 && s2 !== s1 && mx > 150) { suit(s1, "°C", mn, Math.min(mx, 150), mpe, "Chuẩn dải thấp", W); suit(s2, "°C", Math.max(mn, 150), mx, mpe, "Chuẩn dải trung/cao", W); }
+    else suit(s1, "°C", mn, mx, mpe, "Chuẩn nhiệt", W);
+  }
   function psHL(r) { const rising = r.h.dirQTG !== "Falling"; const S = r.ps.set.map(num), R = r.ps.reset.map(num); return rising ? { H: S, L: R } : { H: R, L: S }; }
   function autoCertNo() {
     const S0 = settings[rec.type], pg = rec.type === "PG";
@@ -214,6 +238,12 @@
         }
       }
     } catch (e) { out.errors.push("Lỗi tính: " + e.message); }
+    {
+      const mn = num(h.min), mx = num(h.max), acc = num(h.acc);
+      if (rec.type === "PT") { suit(s1, h.unit, mn, mx, acc / 100 * (mx - mn), "Chuẩn áp suất", out.warns); suit(s2, "mA", 4, 20, acc / 100 * 16, "Chuẩn điện", out.warns); }
+      else { const ps = num(h.pset), vals = rec.ps.set.concat(rec.ps.reset).map(num).filter(isFinite).concat(isFinite(ps) ? [ps] : []);
+        if (vals.length) suit(s1, h.unitPset, Math.min(...vals), Math.max(...vals), acc / 100 * Math.abs(ps), "Chuẩn áp suất", out.warns); }
+    }
     if (out.res && !out.res.pass) out.warns.push("Không đạt: không cấp số chứng chỉ / số tem và không xuất chứng chỉ (quy tắc 30/10/2026)");
     return out;
   }
@@ -288,6 +318,12 @@
           if (out.res.rows.some(r => r.refSrc === "iec")) W.push("Có điểm không có trong Bảng giá trị chuẩn của file – dùng IEC 60751");
         }
       }
+      const mpe = acc / 100 * (mx - mn);
+      if (T === "PG") suit(s1, h.unit, mn, mx, mpe, "Chuẩn áp suất", W);
+      if (T === "TS") { const ts = num(h.tset), v = rec.ts.set.concat(rec.ts.reset).map(num).filter(isFinite).concat(isFinite(ts) ? [ts] : []); if (v.length) suit(s1, "°C", Math.min(...v), Math.max(...v), acc / 100 * Math.abs(ts), "Chuẩn nhiệt", W); }
+      if (T === "TT") { suitT(s1, s2, mn, mx, mpe, W); suit(s3, "mA", 4, 20, acc / 100 * 16, "Ampe kế", W); }
+      if (T === "TG") suitT(s1, s2, mn, mx, mpe, W);
+      if (T === "RTD") { suitT(s1, s2, mn, mx, mpe, W); const sens = num(h.sens) || 0.385; suit(s3, "Ω", C2.pt100(mn).R, C2.pt100(mx).R, mpe * sens, "Thiết bị đo điện trở", W); }
     } catch (e) { E.push("Lỗi tính: " + e.message); }
     return out;
   }

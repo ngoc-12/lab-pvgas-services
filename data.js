@@ -131,6 +131,7 @@ window.LabSeed = {
     showLogo: true,
     showAccred: true,
     warnExpired: false,
+    turMax: 0.3333333333,   // cảnh báo khi U chuẩn > 1/3 sai số cho phép của thiết bị (chờ NGOC chốt 1/3 hay 1/4)
     dueMonths: 12,
     PT: { procedure: "DVK.LAB.TM.21", env: "Nhiệt độ (Temp): 23±2 ºC, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) °C", qtgHum: "(≤70) %RH",
           form: "TM.10.BM.112.2-1", qtgForm: "DVK.LAB.TM21.PL03", prefix: "CN.PT", bbPrefix: "BB.PT" },
