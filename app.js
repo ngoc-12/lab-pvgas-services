@@ -2,17 +2,28 @@
 (function () {
   "use strict";
   const C = window.LabCalc, C2 = window.LabCalc2, D = window.LabDocs, D2 = window.LabDocs2, SEED = window.LabSeed, esc = D.esc;
-  const NEWT = ["PG", "TS", "TT", "RTD"], READY = ["PT", "PS"].concat(NEWT), TEMP = ["TS", "TT", "RTD"];
-  const DESC0 = { PT: "Pressure Transmitter", PS: "Pressure Switch", PG: "Pressure Gauge", TS: "Temperature Switch", TT: "Temperature Transmitter", RTD: "Industrial Platinum Resistance Thermometer" };
+  const NEWT = ["PG", "TS", "TT", "RTD", "TG"], READY = ["PT", "PS"].concat(NEWT), TEMP = ["TS", "TT", "RTD", "TG"];
+  const DESC0 = { PT: "Pressure Transmitter", PS: "Pressure Switch", PG: "Pressure Gauge", TS: "Temperature Switch", TT: "Temperature Transmitter", RTD: "Industrial Platinum Resistance Thermometer", TG: "Temperature Indicator" };
   const blank = n => Array(n).fill("");
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
   const clone = o => JSON.parse(JSON.stringify(o));
   const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const PUNITS = Object.keys(C.UNITS);
-  // Hãng phổ biến cho thiết bị áp suất / nhiệt độ, xếp theo mức độ phổ biến (sổ chọn nhanh)
-  const MAKERS = ["Rosemount", "Yokogawa", "Endress+Hauser", "ABB", "Siemens", "Honeywell", "WIKA", "Foxboro", "Fuji Electric", "Azbil",
-    "Krohne", "VEGA", "Ashcroft", "SOR", "Druck", "United Electric Controls", "Barksdale", "Danfoss", "Dwyer", "Nagano Keiki"];
+  // Hãng sản xuất theo từng loại thiết bị: trước hết là các hãng có trong hồ sơ / danh sách ký của LAB (2024–2026),
+  // sau đó là các hãng phổ biến khác của đúng loại đó. Không có trong danh sách -> chọn KHÁC và gõ tay.
+  const MAKERS = {
+    PT: ["Rosemount", "Yokogawa", "Honeywell", "Endress+Hauser", "ABB", "Siemens", "Foxboro", "Fuji Electric", "Azbil", "WIKA", "Krohne", "VEGA", "Druck", "SMAR", "KELLER"],
+    PS: ["SOR", "United Electric Controls", "Neo-Dyn", "Poter", "Barksdale", "Ashcroft", "WIKA", "Danfoss", "Mercoid", "Custom Control Sensors (CCS)", "Delta Mobrey", "Dwyer", "Nagano Keiki", "Square D"],
+    PG: ["WIKA", "Ashcroft", "Excel", "Rototherm", "ITEC", "Nuova Fima", "Delta Mobrey", "Masoneilan", "Fisher", "Yamaki", "McDaniel", "Helicoid", "Badotherm", "Baumer", "Budenberg", "Dwyer", "Winters", "NOSHOK", "Swagelok", "Tanaka"],
+    DPG: ["Orange Research", "Mid-West Instrument", "ITEC", "WIKA", "Ashcroft", "Dwyer", "Barton", "Badotherm", "Nuova Fima", "Delta Mobrey"],
+    TG: ["Inotek-USA", "Tel-Tru-USA", "Ashcroft", "ITEC", "WIKA", "Rototherm", "Reotemp", "Weiss", "Trerice", "Winters", "Badotherm", "Nuova Fima", "Ametek US Gauge"],
+    TT: ["Siemens", "ABB", "Honeywell", "WIKA", "New-Flow", "Rosemount", "Yokogawa", "Endress+Hauser", "Moore Industries", "Phoenix Contact", "PR electronics"],
+    TS: ["WIKA", "SOR", "United Electric Controls", "Barksdale", "Ashcroft", "Danfoss", "Mercoid", "Dwyer", "ITEC"],
+    RTD: ["MinCo", "Killark", "HyubSung", "Rosemount", "WIKA", "Reotemp", "Hisco", "Pyromation", "Endress+Hauser", "Thermo-Electric", "Okazaki", "Omega"],
+    TC: ["Pyromation", "Applied Energy Corporation/Superior", "WIKA", "Rosemount", "Thermo-Electric", "Okazaki", "Watlow", "Omega", "Endress+Hauser"]
+  };
+  const makersFor = type => MAKERS[type] || MAKERS.PT;
   const OTHER = "__other";
 
   /* ---------- storage (never throws) ---------- */
@@ -55,6 +66,7 @@
     }
     delete r.ps.high; delete r.ps.low;
     const b = newRecord(r.type || "PT");
+    if (!r.tg) r.tg = b.tg;
     for (const k in b.h) if (r.h[k] === undefined) r.h[k] = b.h[k];
     ["pg", "ts", "tt", "rtd"].forEach(k => { if (!r[k]) r[k] = b[k]; });
     return r;
@@ -75,7 +87,7 @@
         min: "", max: "", unit: T ? "°C" : (type === "PG" ? "bar" : "kPa"), acc: type === "PT" ? 0.25 : type === "PS" ? 1 : "", calDate: todayISO(), issueDate: todayISO(),
         procedure: st.procedure, env: st.env, envOk: "1", stand1: "", stand2: type === "PT" ? (stands.find(s => s.kind === "e") || {}).id || "" : "",
         pset: "", unitPset: "kPa", psType: ["PS", "TS"].includes(type) ? "As Found" : "As Left", micro: "NC", dirQTG: "Rising", resolution: 0, note: "",
-        stand3: "", tset: "", scale: "", res: "", errFactor: "0.8", heightDiff: "0", verType: "Định kỳ", extCheck: "1", techCheck: "1", stamp: "", typeEN: "Spring", insul: "", sens: "0.385"
+        stand3: "", tset: "", scale: "", res: "", errFactor: "0.8", heightDiff: "0", verType: "Định kỳ", extCheck: "1", techCheck: "1", stamp: "", typeEN: "Spring", insul: "", sens: "0.385", indType: "Analog"
       },
       pt: { points: ["", "", "", "", ""], rise: ["", "", "", "", ""], fall: ["", "", "", "", ""] },
       ps: { set: ["", "", "", "", ""], reset: ["", "", "", "", ""] },
@@ -83,6 +95,7 @@
       ts: { set: blank(5), reset: blank(5) },
       tt: { nom: blank(5), sr: [0, 1, 2, 3, 4].map(() => blank(3)), sf: [0, 1, 2, 3, 4].map(() => blank(3)), dr: [0, 1, 2, 3, 4].map(() => blank(3)), df: [0, 1, 2, 3, 4].map(() => blank(3)) },
       rtd: { std: blank(6), dut: [0, 1, 2, 3, 4, 5].map(() => blank(5)) },
+      tg: { nom: blank(5), sr: [0, 1, 2, 3, 4].map(() => blank(3)), sf: [0, 1, 2, 3, 4].map(() => blank(3)), dr: [0, 1, 2, 3, 4].map(() => blank(3)), df: [0, 1, 2, 3, 4].map(() => blank(3)) },
       sig: { inspector: "", controller: "" }, saved: false
     };
   }
@@ -98,7 +111,7 @@
     const l = locInfo(h.location); if (h.custFree) l.custVN = h.custFree;   // sửa Cơ sở sử dụng khi khác danh mục
     return l;
   }
-  function makerSel(h) { return h.makerSel || (MAKERS.includes(h.maker) ? h.maker : (h.maker ? OTHER : "")); }
+  function makerSel(h, type = rec.type) { return h.makerSel || (makersFor(type).includes(h.maker) ? h.maker : (h.maker ? OTHER : "")); }
   function yy() { const d = D.toDate(rec.h.calDate) || new Date(); return String(d.getFullYear()).slice(2); }
   // PS: QTG ghi Áp suất tác động / Áp suất trả về theo chiều tác động -> P.High (tăng áp) / P.Low (giảm áp) cho sheet DLVN133
   /* Số chữ số thập phân chuẩn hiển thị được (yêu cầu 30/10/2026: số đọc chuẩn không được nhiều chữ số hơn màn hình của chuẩn).
@@ -250,6 +263,19 @@
           if (!out.res.pass) W.push("Không đạt: không cấp số chứng chỉ / số tem và không xuất chứng chỉ (quy tắc 30/10/2026)");
           if (out.res.lowSingle) W.push("Dải thấp chỉ có 1 điểm: chứng chỉ không in dòng U dải thấp (như Data188)");
         }
+      } else if (T === "TG") {
+        need(s1, "chuẩn nhiệt dải thấp ≤150 °C (Stand1)"); if (s2) need(s2, "");
+        const flat = k => rec.tg[k].flat();
+        nums(flat("sr"), "số đọc chuẩn chiều tăng"); nums(flat("sf"), "số đọc chuẩn chiều giảm"); nums(flat("dr"), "số đọc đồng hồ chiều tăng"); nums(flat("df"), "số đọc đồng hồ chiều giảm");
+        if (!(num(h.res) > 0)) E.push("Chưa nhập độ chia nhỏ nhất (Division) – dùng tính ubk3");
+        [s1, s2].forEach(s => checkDec(s, "°C", [flat("sr"), flat("sf")], "Nhiệt độ chuẩn", ED, W));
+        if (!E.length) {
+          const pts = rec.tg.sr.map((_, p) => ({ sr: rec.tg.sr[p].map(num), sf: rec.tg.sf[p].map(num), dr: rec.tg.dr[p].map(num), df: rec.tg.df[p].map(num) }));
+          out.res = C2.calcTG({ min: mn, max: mx, acc, res: num(h.res), analog: h.indType !== "Digital", pts, s1, s2: s2 || s1 });
+          if ((out.res.nM || out.res.nH) && !s2) W.push("Có điểm > 150 °C nhưng chưa chọn chuẩn dải trung/cao (Stand2) – đang dùng Stand1");
+          if (out.res.lowSingle) W.push("Dải thấp chỉ có 1 điểm: chứng chỉ không in dòng U dải thấp (như Data138)");
+          if (!out.res.pass) W.push("Không đạt: max(U, |SHC|) vượt sai số cho phép (Data138!EG)");
+        }
       } else if (T === "RTD") {
         need(s1, "chuẩn nhiệt dải thấp (Stand1)"); need(s3, "thiết bị đo điện trở (Stand3)"); if (s2) need(s2, "");
         const std = nums(rec.rtd.std, "nhiệt độ chuẩn"); nums(rec.rtd.dut.flat(), "số đọc điện trở");
@@ -275,7 +301,7 @@
   }
   function summaryU(type, r) {
     if (!r) return "";
-    return type === "PT" ? D.uTxt("PT", r.Umax) : type === "PS" ? r.Utext.text : type === "PG" ? "—" : type === "TS" ? D.vn(r.Uprint, 2) : type === "TT" ? D.uTxt("TT", r.Umax) : D.vn(r.U, 2);
+    return type === "PT" ? D.uTxt("PT", r.Umax) : type === "PS" ? r.Utext.text : type === "PG" ? "—" : type === "TS" ? D.vn(r.Uprint, 2) : type === "TT" ? D.uTxt("TT", r.Umax) : type === "TG" ? D.vn(C.xround(r.Umax, 2), 2) : D.vn(r.U, 2);
   }
 
   /* ---------- render: entry ---------- */
@@ -311,7 +337,7 @@
         ${fld("Mô tả (Description)", "h.description", { options: descOpts })}
         ${fld("Kiểu / Model", "h.model")}
         ${fld("Số serial", "h.serial")}
-        ${fld("Hãng sản xuất", "h.makerSel", { options: [["", "— chọn hãng —"], [OTHER, "KHÁC (nhập tay)"]].concat(MAKERS) })}
+        ${fld("Hãng sản xuất", "h.makerSel", { options: [["", "— chọn hãng —"], [OTHER, "KHÁC (nhập tay)"]].concat(makersFor(rec.type)) })}
         ${makerSel(h) === OTHER ? fld("Hãng (nhập tay)", "h.maker") : ""}
         ${PT ? "" : fld("Năm sản xuất", "h.mfgYear", { ph: "N/A" })}
         ${fld(PT ? "Độ chính xác (±%FS)" : "Độ chính xác (±% Pset)", "h.acc", { num: 1 })}
@@ -393,11 +419,14 @@
       + fld("Chiều tác động (QTG)", "h.dirQTG", { options: [["Rising", "Chiều tăng (Rising)"], ["Falling", "Chiều giảm (Falling)"]] }) + asf;
     if (T === "TT") spec = fld("Độ chính xác (±%FS)", "h.acc", { num: 1 }) + fld("Phạm vi đo – Min (°C)", "h.min", { num: 1, sign: 1 }) + fld("Phạm vi đo – Max (°C)", "h.max", { num: 1, sign: 1 })
       + fld("Độ phân giải DUT (mA)", "h.res", { num: 1, ph: "0" }) + asf;
+    if (T === "TG") spec = fld("Năm sản xuất", "h.mfgYear", { ph: "N/A" }) + fld("Độ chính xác (±%FS)", "h.acc", { num: 1 }) + fld("Phạm vi đo – Min (°C)", "h.min", { num: 1, sign: 1 }) + fld("Phạm vi đo – Max (°C)", "h.max", { num: 1, sign: 1 })
+      + fld("Vạch chia (Scale interval) °C", "h.scale", { num: 1 }) + fld("Độ chia nhỏ nhất (Division) °C", "h.res", { num: 1 })
+      + fld("Loại chỉ thị (F7)", "h.indType", { options: [["Analog", "Analog (kim) – ubk3 = d/√3"], ["Digital", "Digital (số) – ubk3 = 0,5·d/√3"]] }) + asf;
     if (T === "RTD") spec = fld("Năm sản xuất", "h.mfgYear") + fld("Độ chính xác (±%FS)", "h.acc", { num: 1 }) + fld("Phạm vi đo – Min (°C)", "h.min", { num: 1, sign: 1 }) + fld("Phạm vi đo – Max (°C)", "h.max", { num: 1, sign: 1 })
       + fld("Độ nhạy (Ω/°C)", "h.sens", { num: 1 }) + fld("Điện trở cách điện (MΩ)", "h.insul", { num: 1 }) + asf;
     const dev = `<div class="grid">${locHtml}
         ${fld("Tag", "h.tag")}${fld("Kiểu / Model", "h.model")}${fld("Số serial", "h.serial")}
-        ${fld("Hãng sản xuất", "h.makerSel", { options: [["", "— chọn hãng —"], [OTHER, "KHÁC (nhập tay)"]].concat(MAKERS) })}
+        ${fld("Hãng sản xuất", "h.makerSel", { options: [["", "— chọn hãng —"], [OTHER, "KHÁC (nhập tay)"]].concat(makersFor(rec.type)) })}
         ${makerSel(h) === OTHER ? fld("Hãng (nhập tay)", "h.maker") : ""}
         ${spec}
         ${fld(T === "PG" ? "Ngày kiểm định" : "Ngày hiệu chuẩn", "h.calDate", { type: "date" })}
@@ -413,6 +442,9 @@
     if (T === "TT") std = `<div class="grid">${fld("Chuẩn nhiệt dải thấp ≤150 °C (Stand1)", "h.stand1", { options: standOptions("t"), wide: 1 })}
         ${fld("Chuẩn nhiệt dải trung / cao (Stand2, trống = Stand1)", "h.stand2", { options: standOptions("t"), wide: 1 })}
         ${fld("Ampe kế (Stand3)", "h.stand3", { options: standOptions("e"), wide: 1 })}${decHint([[standById(h.stand1), "°C"], [standById(h.stand2), "°C"], [standById(h.stand3), "mA", 20]])}</div>`;
+    if (T === "TG") std = `<div class="grid">${fld("Chuẩn nhiệt dải thấp ≤150 °C (Stand1)", "h.stand1", { options: standOptions("t"), wide: 1 })}
+        ${fld("Chuẩn nhiệt dải trung / cao >150 °C (Stand2, trống = Stand1)", "h.stand2", { options: standOptions("t"), wide: 1 })}
+        <div class="hint wide">Như DLVN138.2-1: điểm ≤150 °C dùng U và độ ổn định / radial / axial của Stand1, điểm >150 °C dùng Stand2.</div>${decHint([[standById(h.stand1), "°C"], [standById(h.stand2), "°C"]])}</div>`;
     if (T === "RTD") std = `<div class="grid">${fld("Chuẩn nhiệt dải thấp (Stand1)", "h.stand1", { options: standOptions("t"), wide: 1 })}
         ${fld("Chuẩn nhiệt dải cao ≥150 °C (Stand2, trống = Stand1)", "h.stand2", { options: standOptions("t"), wide: 1 })}
         ${fld("Thiết bị đo điện trở (Stand3)", "h.stand3", { options: standOptions("r"), wide: 1 })}${decHint([[standById(h.stand1), "°C"], [standById(h.stand2), "°C"], [standById(h.stand3), "Ω", 150]])}</div>`;
@@ -438,6 +470,14 @@
       const rows = rec.tt.nom.map((nm, p) => [0, 1, 2].map(k => `<tr class="${k === 2 ? "sep" : ""}">${k === 0 ? `<td rowspan="3" class="n">${sgn(`tt.nom.${p}`, nm)}</td>` : ""}<td class="n">${ord[k]}</td>
           <td>${inp(`tt.sr.${p}.${k}`, rec.tt.sr[p][k], "°C")}</td><td>${inp(`tt.sf.${p}.${k}`, rec.tt.sf[p][k], "°C")}</td><td>${inp(`tt.dr.${p}.${k}`, rec.tt.dr[p][k], "mA")}</td><td>${inp(`tt.df.${p}.${k}`, rec.tt.df[p][k], "mA")}</td></tr>`).join("")).join("");
       pts = `<div class="xs"><table class="entry tt"><thead><tr><th>Điểm HC<br>°C</th><th>Lần</th><th>Chuẩn ↑<br>°C</th><th>Chuẩn ↓<br>°C</th><th>DUT ↑<br>mA</th><th>DUT ↓<br>mA</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <div class="btns"><button class="btn" data-act="pts">Điểm 0-25-50-75-100%</button><button class="btn" data-act="tt23">Lần 2–3 = Lần 1</button><button class="btn pri" data-act="ttsync">⇅ Giảm = Tăng (ô trống)</button></div>`;
+      ptsTitle = "5 điểm × 3 lần";
+    }
+    if (T === "TG") {
+      const ord = ["1st", "2nd", "3rd"];
+      const rows = rec.tg.nom.map((nm, p) => [0, 1, 2].map(k => `<tr class="${k === 2 ? "sep" : ""}">${k === 0 ? `<td rowspan="3" class="n">${sgn(`tg.nom.${p}`, nm)}</td>` : ""}<td class="n">${ord[k]}</td>
+          <td>${inp(`tg.sr.${p}.${k}`, rec.tg.sr[p][k], "°C")}</td><td>${inp(`tg.sf.${p}.${k}`, rec.tg.sf[p][k], "°C")}</td><td>${inp(`tg.dr.${p}.${k}`, rec.tg.dr[p][k], "°C")}</td><td>${inp(`tg.df.${p}.${k}`, rec.tg.df[p][k], "°C")}</td></tr>`).join("")).join("");
+      pts = `<div class="xs"><table class="entry tt"><thead><tr><th>Điểm HC<br>°C</th><th>Lần</th><th>Chuẩn ↑<br>°C</th><th>Chuẩn ↓<br>°C</th><th>Đồng hồ ↑<br>°C</th><th>Đồng hồ ↓<br>°C</th></tr></thead><tbody>${rows}</tbody></table></div>
         <div class="btns"><button class="btn" data-act="pts">Điểm 0-25-50-75-100%</button><button class="btn" data-act="tt23">Lần 2–3 = Lần 1</button><button class="btn pri" data-act="ttsync">⇅ Giảm = Tăng (ô trống)</button></div>`;
       ptsTitle = "5 điểm × 3 lần";
     }
@@ -467,6 +507,11 @@
       + `<table class="mini"><thead><tr><th>Chuẩn °C</th><th>mA lý tưởng</th><th>SHC ↑</th><th>SHC ↓</th><th>%</th></tr></thead><tbody>
         ${r.pt.map(p => `<tr><td>${f3(p.stdT)}</td><td>${f3(p.ideal)}</td><td>${f3(p.cR)}</td><td>${f3(p.cF)}</td><td>${f3(p.err)}</td></tr>`).join("")}</tbody></table>
         <details><summary>Bảng tính chi tiết cho Quality Checker</summary><div class="qc"><div>Cj=${r.Cj.toPrecision(6)} · điểm thấp/trung/cao = ${r.nL}/${r.nM}/${r.nH} · uch2 ampe kế=${r.F40.toPrecision(6)}</div>
+        <div>U thấp=${r.R.low.U.toPrecision(8)} · trung=${r.R.mid.U.toPrecision(8)} · cao=${r.R.high.U.toPrecision(8)}</div>${qc}</div></details>`;
+    if (T === "TG") return vd(r.lines.map(l => `${l.from}÷${l.to} °C: U = ${vn(C.xround(l.U, 2), 2)}`).join(" · ") + ` · max |SHC| ${r.maxSHC.toPrecision(4)} / cho phép ${r.lim.toPrecision(4)} °C`)
+      + `<table class="mini"><thead><tr><th>Chuẩn °C</th><th>Tăng</th><th>Giảm</th><th>SHC</th><th>Dải</th></tr></thead><tbody>
+        ${r.pt.map((p, i) => `<tr><td>${f3(p.stdT)}</td><td>${f3(p.rise)}</td><td>${f3(p.fall)}</td><td class="${Math.abs(p.corr) > r.lim ? "bad" : ""}">${f3(p.corr)}</td><td>${r.cls[i]}</td></tr>`).join("")}</tbody></table>
+        <details><summary>Bảng tính chi tiết cho Quality Checker</summary><div class="qc"><div>điểm thấp/trung/cao = ${r.nL}/${r.nM}/${r.nH} · ubk3 phân giải = ${r.ubk3.toPrecision(6)}</div>
         <div>U thấp=${r.R.low.U.toPrecision(8)} · trung=${r.R.mid.U.toPrecision(8)} · cao=${r.R.high.U.toPrecision(8)}</div>${qc}</div></details>`;
     return vd(`U = ${vn(r.U, 2)} °C · R0 = ${vn(r.R0, 3)} Ω · ${r.neg ? "bậc 3" : "bậc 2"}`)
       + `<table class="mini"><thead><tr><th>Chuẩn</th><th>R đo</th><th>R đặc tuyến</th><th>Lệch Ω</th><th>Lệch °C</th></tr></thead><tbody>
@@ -510,7 +555,7 @@
     if (p === "certNo") rec.certAuto = false;
     if (p === "h.makerSel") { rec.h.maker = e.target.value === OTHER ? "" : e.target.value; renderEntry(); if (e.target.value === OTHER) focusPath("h.maker"); persistCurrent(); return; }
     if (p.startsWith("pt.points") || p.startsWith("pg.std") || p.startsWith("tt.nom")) rec.ptAuto = false;
-    if (["PT", "PG", "TT"].includes(rec.type) && (p === "h.min" || p === "h.max") && rec.ptAuto) { genPoints(); renderEntry(); focusPath(p); }
+    if (["PT", "PG", "TT", "TG"].includes(rec.type) && (p === "h.min" || p === "h.max") && rec.ptAuto) { genPoints(); renderEntry(); focusPath(p); }
     else if (p === "h.psType" && rec.type === "TS") { renderEntry(); focusPath(p); }
     else if (p === "h.unit" || p === "h.unitPset" || p === "h.description" || p === "h.calDate" || p === "h.dirQTG" || p === "h.location" || p === "h.locFree" || p.startsWith("h.stand")) {
       if (p === "h.calDate" && rec.certAuto) rec.certNo = autoCertNo();
@@ -527,7 +572,7 @@
   function genPoints() {
     const mn = num(rec.h.min), mx = num(rec.h.max); if (!(mx > mn)) return;
     const P = [0, 1, 2, 3, 4].map(k => String(C.xround((mx - mn) / 4 * k + mn, 6)));  // QTG!D23 = (G23-C23)/4*k + C23
-    if (rec.type === "PG") rec.pg.std = P; else if (rec.type === "TT") rec.tt.nom = P; else rec.pt.points = P;
+    if (rec.type === "PG") rec.pg.std = P; else if (rec.type === "TT") rec.tt.nom = P; else if (rec.type === "TG") rec.tg.nom = P; else rec.pt.points = P;
   }
   // Một nút đồng bộ: điền ô trống từ chiều còn lại; nếu không có ô trống thì gán Giảm = Tăng.
   function syncRF() {
@@ -565,12 +610,13 @@
       if (!n) rec.pg.fall = R.slice(); toast(n ? `Đã điền ${n} ô từ chiều còn lại` : "Đã đồng bộ: Giảm = Tăng"); renderEntry();
     }
     if (act === "copyts") { rec.ts.set = rec.ts.set.map(() => rec.ts.set[0]); rec.ts.reset = rec.ts.reset.map(() => rec.ts.reset[0]); renderEntry(); toast("Đã chép lần 1 cho cả 5 lần"); }
-    if (act === "tt23") { ["sr", "sf", "dr", "df"].forEach(k => rec.tt[k] = rec.tt[k].map(a => a.map(() => a[0]))); renderEntry(); toast("Đã chép lần 1 cho lần 2–3"); }
+    const G = rec.type === "TG" ? rec.tg : rec.tt;   // TT and TG share the 5 points × 3 readings layout
+    if (act === "tt23") { ["sr", "sf", "dr", "df"].forEach(k => G[k] = G[k].map(a => a.map(() => a[0]))); renderEntry(); toast("Đã chép lần 1 cho lần 2–3"); }
     if (act === "ttsync") {
       let n = 0;
-      [["sr", "sf"], ["dr", "df"]].forEach(([a, b]) => rec.tt[a].forEach((row, p) => row.forEach((v, k) => {
-        const x = String(v).trim(), y = String(rec.tt[b][p][k]).trim();
-        if (x && !y) { rec.tt[b][p][k] = x; n++; } else if (y && !x) { rec.tt[a][p][k] = y; n++; }
+      [["sr", "sf"], ["dr", "df"]].forEach(([a, b]) => G[a].forEach((row, p) => row.forEach((v, k) => {
+        const x = String(v).trim(), y = String(G[b][p][k]).trim();
+        if (x && !y) { G[b][p][k] = x; n++; } else if (y && !x) { G[a][p][k] = y; n++; }
       })));
       renderEntry(); toast(`Đã điền ${n} ô`);
     }
@@ -604,9 +650,9 @@
   function docInfo() {
     const c = compute();
     const s1 = standById(rec.h.stand1), s2 = standById(rec.h.stand2), s3 = standById(rec.h.stand3), T = rec.type;
-    const used = T === "PT" ? [s1, s2] : ["TT", "RTD"].includes(T) ? [s1, s2, s3] : [s1];
+    const used = T === "PT" || T === "TG" ? [s1, s2] : ["TT", "RTD"].includes(T) ? [s1, s2, s3] : [s1];
     const exp = settings.warnExpired ? used.filter(Boolean).filter(s => isExpired(s, rec.h.calDate)) : [];
-    return { c, info: { stand1: s1, stand2: ["PT", "TT", "RTD"].includes(T) ? s2 : null, stand3: s3, heat: T === "TS" ? s1 : null, loc: recLoc(), draft: exp.length ? "CHUẨN HẾT HẠN, CẦN CẬP NHẬT" : (c.warns.some(w => w.startsWith("Chưa nhập")) ? "CHƯA ĐỦ CHỮ KÝ" : "") } };
+    return { c, info: { stand1: s1, stand2: ["PT", "TT", "RTD", "TG"].includes(T) ? s2 : null, stand3: s3, heat: T === "TS" ? s1 : null, loc: recLoc(), draft: exp.length ? "CHUẨN HẾT HẠN, CẦN CẬP NHẬT" : (c.warns.some(w => w.startsWith("Chưa nhập")) ? "CHƯA ĐỦ CHỮ KÝ" : "") } };
   }
   function pagesHtml(which) {
     const { c, info } = docInfo();
@@ -701,7 +747,7 @@
       rec = clone(r); rec.id = "r" + Date.now().toString(36); rec.saved = false; rec.summary = null; rec.h.tag = ""; rec.h.serial = "";
       const b = newRecord(r.type);
       rec.pt = { points: r.pt.points.slice(), rise: ["", "", "", "", ""], fall: ["", "", "", "", ""] }; rec.ps = b.ps; rec.ts = b.ts;
-      rec.pg = Object.assign(b.pg, { std: (r.pg || b.pg).std.slice() }); rec.tt = Object.assign(b.tt, { nom: (r.tt || b.tt).nom.slice() }); rec.rtd = Object.assign(b.rtd, { std: (r.rtd || b.rtd).std.slice() });
+      rec.pg = Object.assign(b.pg, { std: (r.pg || b.pg).std.slice() }); rec.tt = Object.assign(b.tt, { nom: (r.tt || b.tt).nom.slice() }); rec.tg = Object.assign(b.tg, { nom: (r.tg || b.tg).nom.slice() }); rec.rtd = Object.assign(b.rtd, { std: (r.rtd || b.rtd).std.slice() });
       rec.certNo = autoCertNo(); rec.certAuto = true; persistCurrent(); go("entry"); toast("Đã nhân bản – nhập tag và số đọc mới");
     }
     if (b.dataset.r === "del" && r) {

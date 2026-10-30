@@ -2,6 +2,7 @@
  *   PG : 08-2011_PG_CKS_Oct-2026.docx (GCN kiểm định, 2 pages) + QTG PG GPP T8 CKS.docx (Biên bản kiểm định ĐLVN 08:2011.PL1)
  *   TS : TM13_TS_CKS.docx + QTG_TS_LFS_01_T9_2026.pdf (BM.TM.13-1)
  *   TT : TT_CKS.docx      + QTG_TT-LFS_07_T9_2026.pdf (DVK.LAB.TM.12.PL2)
+ *   TG : GCN_TG_GPP_2026.docx + 6. ĐLVN 138_TG_QTG_2026.docx (ĐLVN 138:2004.PL3)
  *   RTD: RTD Cert_CKS.docx + QTG_TE_LFS_06_T9_2026.pdf (ĐLVN 125:2003.PL2)
  * Uncertainty sheets follow DLVNTM13 / DLVN188.2-2 / "DLVN125 NK chuan + do Ohm" (cell references in the left column).
  */
@@ -17,7 +18,8 @@
   const DESC = {
     TS: ["Thiết bị đặt mức nhiệt độ", "Temperature Switch"],
     TT: ["Thiết bị chuyển đổi đo nhiệt độ", "Temperature Transmitter"],
-    RTD: ["Nhiệt kế điện trở Platin công nghiệp", "Industrial Platinum Resistance Thermometers"]
+    RTD: ["Nhiệt kế điện trở Platin công nghiệp", "Industrial Platinum Resistance Thermometers"],
+    TG: ["Đồng hồ nhiệt độ", "Temperature Indicator"]
   };
   // Excel "#,00000 E+##" in the Vietnamese locale: -6,13663 E-7
   function sci(v) {
@@ -48,14 +50,16 @@
     const h = rec.h, T = rec.type, L = info.loc || {}, cal = toDate(h.calDate), dd = due(rec, st), iss = toDate(h.issueDate) || cal;
     const row = (a, b, cls) => `<tr${cls ? ` class="${cls}"` : ""}><td>${a}</td><td>${b}</td></tr>`;
     const [dVNn, dENn] = DESC[T];
-    const stds = T === "TS" ? [info.stand1] : T === "TT" ? [info.stand1, info.stand2, info.stand3] : [info.stand1, info.stand2, info.stand3];
+    const stds = T === "TS" ? [info.stand1] : T === "TG" ? [info.stand1, info.stand2] : T === "TT" ? [info.stand1, info.stand2, info.stand3] : [info.stand1, info.stand2, info.stand3];
     const sj = stdJoin(stds);
     let spec;
     if (T === "TS") spec = `Dải làm việc ${it("(Range)")}: (${vnTxt(h.min)} ÷ ${vnTxt(h.max)})${deg}<br>Nhiệt độ đặt ${it("(Set point)")}: ${vnTxt(h.tset)} ${deg}<br>Độ chính xác ${it("(Accuracy)")}: ±${vnTxt(h.acc)}%Tset`;
+    else if (T === "TG") spec = `Phạm vi đo ${it("(Range)")}: (${vnTxt(h.min)}÷ ${vnTxt(h.max)}) ${deg}<br>Độ chia nhỏ nhất ${it("(Smallest division)")}: ${vnTxt(h.res)}${deg}<br>Độ chính xác ${it("(Accuracy)")}: ${accTxt(h, "FS")}`;
     else spec = `Phạm vi đo ${it("(Range)")}: (${vnTxt(h.min)} ÷ ${vnTxt(h.max)})${deg}<br>Độ chính xác ${it("(Accuracy)")}: ${accTxt(h, "FS")}`;
     const top = row(`${T === "TT" ? "Phương tiện đo" : T === "TS" ? "Tên thiết bị" : "Tên đối tượng"} ${it("(Dut)")}:`, `${dVNn} ${T === "RTD" ? `<br><span class="sm">${it(`(${dENn})`)}</span>` : it(`(${dENn})`)}`)
       + (T === "TT"
         ? row(`Kiểu ${it("(Type)")}: ${esc(h.model)}`, `Số ${it("(Serial No)")} Mã QL ${it("(Tag No)")}: ${esc(h.serial || "N/A")}/ ${esc(h.tag)}`)
+        : T === "TG" ? row(`Kiểu ${it("(Type)")}: ${esc(h.model || "N/A")}`, `Mã QL ${it("(Tag No)")}: ${esc(h.tag)}`)
         : row(`Kiểu ${it("(Type)")}: ${esc(h.model)}`, `Mã QL ${it("(Tag No)")}: ${esc(h.tag)}<br>Số hiệu ${it("(Serial No.)")}: ${esc(h.serial || "N/A")}`))
       + row(`Nơi sản xuất ${it("(Manufacturer)")}:`, esc(h.maker))
       + row(`Đặc trưng kỹ thuật đo lường ${it("(Specification)")}:`, spec)
@@ -63,9 +67,10 @@
       + row(`Phương pháp thực hiện:<br>${it("(Method of calibration)")}:`, `${esc(h.procedure)}<br>Điều kiện môi trường ${it("(Environment)")}:<br>${envHtml(h.env)}`);
     const sRow = (lab, en, k) => `<tr><td class="ind">${lab} ${it(`(${en})`)}:</td><td>${esc(sj[k])}</td></tr>`;
     const stdT = `<table class="ckv std one">${sRow("Tên thiết bị", "Name", "name")}${sRow("Kiểu", T === "TT" ? "Type" : "Model", "model")}${sRow("Số hiệu", "Serial No.", "serial")}
-      ${sRow("Nơi sản xuất", "Manufacturer", "maker")}${sRow("Phạm vi đo", "Range", "range")}${sRow("Độ KĐBĐ", "Uncertainty", "unc")}${sRow("Dẫn xuất chuẩn", "Traceability", "trace")}</table>`;
+      ${sRow("Nơi sản xuất", "Manufacturer", "maker")}${sRow("Phạm vi đo", "Range", "range")}${sRow("Độ KĐBĐ", "Uncertainty", "unc")}${sRow("Dẫn xuất chuẩn", "Traceability", "trace")}
+      ${T === "TG" ? `<tr><td class="ind">Thiết bị tạo nhiệt độ ${it("(Heat Source)")}:</td><td>${esc(stds.filter(Boolean).map(s => s.heat || "").filter((x, i, a) => x && a.indexOf(x) === i).join("; "))}</td></tr>` : ""}</table>`;
     const day = st.issueDayBlank ? "...." : p2(iss.getDate());
-    return `<section class="a4 cert">${wmImg}<div class="frame"></div>${draft(info)}${certHeader(st, T === "TT" ? "" : "lab")}
+    return `<section class="a4 cert">${wmImg}<div class="frame"></div>${draft(info)}${certHeader(st, T === "TT" || T === "TG" ? "" : "lab")}
       <h1>GIẤY CHỨNG NHẬN HIỆU CHUẨN</h1><div class="sub"><b><i>(Calibration Certificate)</i></b></div>
       <div class="no">Số ${it("(N<sup>o</sup>)")}: ${esc(rec.certNo)}</div>
       <table class="ckv tc">${top}<tr><td colspan="2">Chuẩn được sử dụng ${it("(Standards set)")}:</td></tr></table>
@@ -105,6 +110,13 @@
         <tr><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th></tr></thead><tbody>${rows}</tbody></table>`;
       const lines = res.lines.map(l => `<p class="c"><b><i>- Dải đo (Range) (${nTxt("TT", l.from, C.pubDec([l.from], 3))} ÷ ${nTxt("TT", l.to, C.pubDec([l.to], 3))})${deg} : U = ${uTxt("TT", l.U)}${deg}.</i></b></p>`).join("");
       mid = K2 + lines;
+    } else if (T === "TG") {
+      // Data138: standard ROUND 2 shown "0,000"; reading and correction "#.##0,0" (2 decimals when the division has 2, e.g. 1,25 °C)
+      const dd = tgDec(h), U2 = l => vn(C.xround(l.U, 2), 2);
+      const rows = res.pt.map((p, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(C.xround(p.stdT, 2), 3)}</td><td>${vn(p.rise, dd)}</td><td>${vn(p.fall, dd)}</td><td>${vn(p.corr, dd)}</td></tr>`).join("");
+      table = `<table class="res cres"><thead><tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Nhiệt độ chuẩn<br>${it("(Standard)")}<br>${deg}</th><th colspan="2">Giá trị đọc ${it("(Indicator)")}<br>${deg}</th><th rowspan="2">Số hiệu chính<br>${it("(Correction)")}<br>${deg}</th></tr>
+        <tr><th>Tăng ${it("(Increasing)")}</th><th>Giảm ${it("(Decreasing)")}</th></tr></thead><tbody>${rows}</tbody></table>`;
+      mid = K2 + res.lines.map(l => `<p>- Dải đo ${it("(Range)")} (${l.from} ÷ ${l.to})${deg}: U = ${U2(l)}${deg} .</p>`).join("");
     } else {
       const rows = res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(r.nom, 1)}</td><td>${vn(r.std, 3)}</td><td>${vn(r.dut, 2)}</td><td>${vn(r.Rfit, 2)}</td><td>${vn(r.eO, 2)}</td><td>${vn(r.eC, 2)}</td></tr>`).join("");
       table = `<table class="res cres"><thead><tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th colspan="2">Nhiệt độ chuẩn<br>${it("(Standard Temp)")} ${deg}</th><th rowspan="2">Trung bình đo được<br>${it("(Measured mean value)")} Ω</th>
@@ -307,6 +319,39 @@
     return `<section class="a4 qtg ttqtg">${wmImg}${draft(info)}${qHeader(st, "")}${qTitle(bbNo(rec, st), S0.qtgForm)}${tbl}${data}${qtgSig(rec)}</section>`;
   }
 
+  /* ======================= QTG – TG (ĐLVN 138:2004.PL3) ======================= */
+  // decimals of the DUT readings: 1, or more when the smallest division needs it (1,25 °C -> 2)
+  const tgDec = h => Math.max(1, decimalsOf([num(h.res)]));
+  function tgQtg(rec, res, st, info) {
+    const h = rec.h, S0 = S(st, "TG"), L = info.loc || {}, cal = toDate(h.calDate);
+    const t = [info.stand1, info.stand2].filter(Boolean).filter((s, i, a) => a.indexOf(s) === i);
+    const j = f => t.map(f).join("; ");
+    const tbl = `<table class="dot q4"><colgroup><col style="width:6%"><col style="width:6%"><col style="width:41%"><col style="width:47%"></colgroup>
+      <tr><td colspan="4">Tên phương tiện đo ${it("(Dut)")}: Thiết bị chỉ thị nhiệt độ ${it("(Digital and Analog Temperature Indicators)")}</td></tr>
+      <tr><td colspan="3">Kiểu ${it("(Type)")}: ${esc(h.model || "N/A")}</td><td>Số ${it("(Tag No)")}: ${esc(h.tag)}</td></tr>
+      <tr><td colspan="3">Cơ sở sản xuất ${it("(Manufacturer)")}: ${esc(h.maker)}</td><td>Năm sản xuất ${it("(Manufacture Year)")}: ${esc(h.mfgYear || "")}</td></tr>
+      <tr><td colspan="4">Đặc trưng kỹ thuật ${it("(Specification)")}</td></tr>
+      <tr><td></td><td colspan="2">Phạm vi đo ${it("(Range)")}: (${esc(h.min)}÷${esc(h.max)})${deg}</td><td>Vạch chia ${it("(Scale Interval)")}: ${vnTxt(h.scale)}${deg}</td></tr>
+      <tr><td></td><td colspan="2">Độ chính xác ${it("(Accuracy)")}: ±${vnTxt(h.acc)}%FS</td><td>Độ chia nhỏ nhất ${it("(Division)")}: ${vnTxt(h.res)}${deg}</td></tr>
+      <tr><td colspan="4">Cơ sở sử dụng ${it("(Customer)")}: ${esc(L.custVN)}</td></tr>
+      <tr><td colspan="3">Phương pháp thực hiện ${it("(Method)")}:</td><td>${esc(h.procedure)}</td></tr>
+      <tr><td colspan="4">Chuẩn, thiết bị chính sử dụng ${it("(Standard set)")}:</td></tr>
+      <tr><td></td><td colspan="2">Kiểu ${it("(Model)")}: ${esc(j(s => s.model))}</td><td></td></tr>
+      <tr><td></td><td colspan="2">Số hiệu ${it("(Serial No.)")}: ${esc(j(s => s.serial))}</td><td>Độ chính xác ${it("(Accuracy)")}: ${esc(j(s => vnTxt(s.accuracy || "")))}</td></tr>
+      <tr><td></td><td colspan="2">Phạm vi đo ${it("(Range)")}: ${esc(j(s => `(${s.min} ÷ ${s.max})°C`))}</td><td>Độ phân giải ${it("(Definition)")}: ${esc(j(s => vnTxt(String(s.res || "").replace("°C", "oC"))))}</td></tr>
+      <tr><td colspan="4">Điều kiện môi trường ${it("(Environment)")}</td></tr>
+      ${envRow(h, S0, [3, 1])}
+      <tr><td colspan="4">Người thực hiện ${it("(Calibrated by)")}: ${esc(rec.sig.inspector)}</td></tr>
+      <tr><td colspan="4">Ngày thực hiện ${it("(Calib. Date)")}: ${dVN(cal)}</td></tr>
+      <tr><td colspan="4">Địa điểm thực hiện ${it("(Location)")}: ${esc(h.calPlace || L.locVN || L.code)}</td></tr>
+      <tr><td colspan="3">Số liệu và kết quả ${it("(Result)")}:</td><td>${cb(h.psType !== "As Left")} AsFound <span class="gap"></span> ${cb(h.psType === "As Left")} AsLeft</td></tr></table>`;
+    const ord = ["1<sup>st</sup>", "2<sup>nd</sup>", "3<sup>rd</sup>"], dd = tgDec(h);
+    const body = rec.tg.sr.map((_, p) => [0, 1, 2].map(k => `<tr>${k === 0 ? `<td rowspan="3">${vn(num(rec.tg.nom[p]), 3)}</td>` : ""}<td>${ord[k]}</td><td>${vn(num(rec.tg.sr[p][k]), 3)}</td><td>${vn(num(rec.tg.sf[p][k]), 3)}</td><td>${vn(num(rec.tg.dr[p][k]), dd)}</td><td>${vn(num(rec.tg.df[p][k]), dd)}</td></tr>`).join("")).join("");
+    const data = `<table class="res qres ttq"><thead><tr><th rowspan="2">Điểm HC<br>${it("(Calib Point)")}</th><th rowspan="2">Lần đọc<br>${it("(read)")}</th><th colspan="2">Nhiệt độ Chuẩn ${it("(Standard)")}/ ${deg}</th><th colspan="2">Phương tiện đo ${it("(Dut)")}/ ${deg}</th></tr>
+      <tr><th>Chiều tăng<br>${it("(Increasing)")}</th><th>Chiều giảm<br>${it("(Decreasing)")}</th><th>Chiều tăng<br>${it("(Increasing)")}</th><th>Chiều giảm<br>${it("(Decreasing)")}</th></tr></thead><tbody>${body}</tbody></table>`;
+    return `<section class="a4 qtg ttqtg">${wmImg}${draft(info)}${qHeader(st, "")}${qTitle(bbNo(rec, st), S0.qtgForm)}${tbl}${data}${qtgSig(rec)}</section>`;
+  }
+
   /* ======================= QTG – RTD ======================= */
   const RTDLBL = ["01", "02", "03 (tg)", "04", "05", "t<sub>g</sub><br>(lần 2)"];
   function rtdQtg(rec, res, st, info) {
@@ -430,6 +475,39 @@
       "Công thức theo file 1.TT_LFS_CM_26.xls, sheets DLVN188.2-2, STDEV calc, Data188. Đã đối chiếu với số mẫu trong sheet (dải thấp 0,146166 / trung 0,281006 °C).");
   }
 
+  function tgUnc(rec, res, st, info) {
+    const h = rec.h, s1 = info.stand1, s2 = info.stand2;
+    const inp = `<div class="ucols"><table class="ukv">
+        ${r3("F4 / F5", "Min / Max range", `${esc(h.min)} / ${esc(h.max)}`, deg)}${r3("F6", "Độ chia nhỏ nhất", esc(h.res), deg)}
+        ${r3("F7", "Loại chỉ thị (1 Analog / 0,5 Digital)", g(res.F7))}${r3("F21–F23", "Số điểm thấp / trung / cao", `${res.nL} / ${res.nM} / ${res.nH}`)}
+        ${r3("F24 / F25", "Số lần đọc / k", `${res.n} / ${res.k}`)}
+      </table><table class="ukv">
+        ${r3("E4 / F14", "Chuẩn dải thấp / U", `${esc(s1 ? s1.key : "")} / ${g(s1 ? s1.unc : 0)}`, deg)}${r3("E5 / G14", "Chuẩn dải trung–cao / U", `${esc(s2 ? s2.key : "—")} / ${g(s2 ? s2.unc : 0)}`, deg)}
+        ${r3("F18:F20", "Lò 1: ổn định / radial / axial", s1 ? `${g(s1.stab || 0)} / ${g(s1.radial || 0)} / ${g(s1.axial || 0)}` : "", deg)}
+        ${r3("G18:G20", "Lò 2: ổn định / radial / axial", s2 ? `${g(s2.stab || 0)} / ${g(s2.radial || 0)} / ${g(s2.axial || 0)}` : "—", deg)}
+      </table></div>`;
+    const P = res.pt;
+    const row = (lab, f) => `<tr><td class="l">${lab}</td>${P.map(p => `<td>${f(p)}</td>`).join("")}</tr>`;
+    const grid = `<table class="res ug"><thead><tr><th class="l">Đại lượng</th>${P.map((p, i) => `<th>Điểm ${i + 1} (${res.cls[i]})</th>`).join("")}</tr></thead><tbody>
+      ${row("Chuẩn TB G55 (°C)", p => g(p.stdT, 7))}${row("Si chuẩn tăng / giảm", p => `${g(p.sSr, 3)} / ${g(p.sSf, 3)}`)}
+      ${row("DUT TB tăng / giảm (°C)", p => `${g(p.rise, 7)} / ${g(p.fall, 7)}`)}${row("Si DUT tăng / giảm", p => `${g(p.sDr, 3)} / ${g(p.sDf, 3)}`)}
+      ${row("Hồi trễ |giảm − tăng|", p => g(p.hyst, 4))}${row("Số hiệu chính M55 = chuẩn − tăng", p => g(p.corr, 4))}</tbody></table>`;
+    const R = res.R, keys = [["low", "thấp"], ["mid", "trung"], ["high", "cao"]];
+    const rr = (lab, f) => `<tr><td class="l">${lab}</td>${keys.map(([k]) => `<td>${R[k].cnt ? f(R[k]) : "—"}</td>`).join("")}</tr>`;
+    const ut = `<table class="res ug"><thead><tr><th class="l">Thành phần (cột F / H / J)</th>${keys.map(([, t]) => `<th>Dải ${t}</th>`).join("")}</tr></thead><tbody>
+      ${rr("Ultb chuẩn (33)", x => g(x.UltbS, 4))}${rr("uch4 tản mạn = Ultb/√n (34)", x => g(x.uch4, 4))}${rr("uch1 nhiệt kế chuẩn = U/k (35)", x => g(x.uch1, 4))}
+      ${rr("uch2 chỉ thị chuẩn (36)", x => g(x.uch2, 4))}${rr("uch3 thiết bị tạo MT (37)", x => g(x.uch3, 4))}${rr("uch (38)", x => g(x.uch, 4))}
+      ${rr("Ultb DUT (45)", x => g(x.UltbD, 4))}${rr("ubk2 tản mạn = Ultb/√n (46)", x => g(x.ubk2, 4))}${rr("ubk1 hồi trễ = hyst/(2√3) (47)", x => g(x.ubk1, 4))}
+      ${rr("ubk3 phân giải = F7·d/√3 (48)", x => g(x.ubk3, 4))}${rr("uDUT (49)", x => g(x.uDUT, 4))}${rr("uc (50)", x => g(x.uc, 4))}${rr("Uexp = 2·uc (51)", x => g(x.U, 6))}
+      ${rr("In chứng chỉ (Data138 ROUND 2)", x => `<b>${vn(C.xround(x.U, 2), 2)}</b>`)}${rr("Nếu theo quy tắc 2 CSCN làm tròn lên", x => uTxt("TT", x.U))}</tbody></table>`;
+    const chk = `<table class="res ug chk"><thead><tr><th>Max U (°C)</th><th>Max |SHC| (°C)</th><th>Giới hạn DZ = Acc/100·span (°C)</th><th>Kết luận (EG)</th></tr></thead>
+      <tbody><tr><td>${g(res.Umax, 4)}</td><td>${g(res.maxSHC, 4)}</td><td>${g(res.lim, 4)}</td><td>${verdict(res.pass)}</td></tr></tbody></table>
+      <div class="unote">Data138!EG so sánh cả U và |SHC| với sai số cho phép – giữ nguyên như file. U in chứng chỉ theo ROUND 2 của Data138 (có thể nhỏ hơn U tính, ví dụ 0,5829 → 0,58) – chờ NGOC chốt có áp dụng quy tắc làm tròn lên hay không.</div>`;
+    return uWrap(rec, st, info, "BẢNG TÍNH TOÁN ĐỘ KHÔNG ĐẢM BẢO ĐO CỦA PHÉP HIỆU CHUẨN – TEMPERATURE GAUGE", "Digital and analog thermometer – DLVN138.2-1 (ĐLVN 138:2004)",
+      inp + `<div class="ulbl">Theo điểm (hàng 28–59):</div>` + grid + `<div class="ulbl">Ngân sách độ KĐBĐ theo dải:</div>` + ut + `<div class="ulbl">Kiểm tra:</div>` + chk,
+      "Công thức theo file TG_GPP 08-2026_Phuoc_.xlsm, sheets DLVN138.2-1, STDEV Calc, Data138. Đã đối chiếu 45/45 hồ sơ GPP 08/2026 (U và kết luận khớp).");
+  }
+
   function rtdUnc(rec, res, st, info) {
     const h = rec.h, s1 = info.stand1, s2 = info.stand2, mt = info.stand3;
     const inp = `<div class="ucols"><table class="ukv">
@@ -464,7 +542,8 @@
     PG: { c1: pgCert1, c2: pgCert2, q: pgQtg, u: pgUnc },
     TS: { c1: tCert1, c2: tCert2, q: tsQtg, u: tsUnc },
     TT: { c1: tCert1, c2: tCert2, q: ttQtg, u: ttUnc },
-    RTD: { c1: tCert1, c2: tCert2, q: rtdQtg, u: rtdUnc }
+    RTD: { c1: tCert1, c2: tCert2, q: rtdQtg, u: rtdUnc },
+    TG: { c1: tCert1, c2: tCert2, q: tgQtg, u: tgUnc }
   };
   window.LabDocs2 = { PAGES, sci };
 })();

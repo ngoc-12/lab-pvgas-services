@@ -81,7 +81,7 @@ window.LabSeed = {
     ["KCTV", "Kho Cảng PVGAS Vũng Tàu", "PVGAS Vung Tau Terminal", "Chi nhánh Logistics – Tổng Công ty Khí Việt Nam - CTCP", "PetroVietnam Gas Joint Stock Corporation - Logistics Branch"],
     ["TNTV", "Kho Cảng PVGAS Vũng Tàu", "PVGAS Vung Tau Terminal", "Chi nhánh Logistics – Tổng Công ty Khí Việt Nam - CTCP", "PetroVietnam Gas Joint Stock Corporation - Logistics Branch"],
     ["KLTV", "Kho Cảng PVGAS Vũng Tàu", "PVGAS Vung Tau Terminal", "Chi nhánh Logistics – Tổng Công ty Khí Việt Nam - CTCP", "PetroVietnam Gas Joint Stock Corporation - Logistics Branch"],
-    ["GPP", "Nhà máy xử lý Khí Dinh Cố", "Dinh Co Gas Processing Plant", "", ""],
+    ["GPP", "Nhà máy xử lý Khí Dinh Cố", "Dinh Co Gas Processing Plant", "CN Khí Đông Nam Bộ - TCT Khí Việt Nam - CTCP", "Petrovietnam Gas South East Branch"],
     ["KLNG", "Kho LNG Thị Vải", "LNG Thi Vai Terminal", "Chi nhánh Logistics – Tổng Công ty Khí Việt Nam - CTCP", "PetroVietnam Gas Joint Stock Corporation - Logistics Branch"],
     ["Kho Đình Vũ", "Kho LPG Đình Vũ", "Dinh Vu LPG Storage", "Chi nhánh Khí Hải Phòng - TCT Khí Việt Nam - CTCP", "PVGAS Hai Phong"],
     ["Kho Gò Dầu", "Kho LPG Gò Dầu", "Go Dau LPG Storage", "Chi nhánh Logistics – Tổng Công ty Khí Việt Nam - CTCP", "PetroVietnam Gas Joint Stock Corporation - Logistics Branch"],
@@ -143,6 +143,9 @@ window.LabSeed = {
           form: "DLVNTM13", qtgForm: "BM.TM.13-1", prefix: "CN.TS", bbPrefix: "BB.TS" },
     TT: { procedure: "DVK.LAB.TM.12", env: "Nhiệt độ (Temp): (23±2)°C, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) °C", qtgHum: "(≤70) %RH",
           form: "DLVN188.2-2", qtgForm: "DVK.LAB.TM.12.PL2", prefix: "CN.TT", bbPrefix: "BB.TT" },
+    // TG – GCN_TG_GPP_2026.docx + 6. ĐLVN 138_TG_QTG_2026.docx (BB.TG.yy.nnnn, ĐLVN 138:2004.PL3), sheet DLVN138.2-1 (BT.TG)
+    TG: { procedure: "ĐLVN 138:2004", env: "Nhiệt độ (Temp): 23±2 oC, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) oC", qtgHum: "≤70 %RH",
+          form: "DLVN138.2-1", qtgForm: "ĐLVN 138:2004.PL3", prefix: "CN.TG", bbPrefix: "BB.TG" },
     RTD: { procedure: "ĐLVN 125:2003", env: "Nhiệt độ (Temp): (23±2)°C, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) °C", qtgHum: "≤50 %RH",
           form: "TM.10.BM.125.2", qtgForm: "ĐLVN 125:2003.PL2", prefix: "CN.RTD", bbPrefix: "BB.RTD" }
   }

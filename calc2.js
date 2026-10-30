@@ -1,9 +1,10 @@
-/* LAB PVGAS Services – calculation core, part 2 (PG, TS, TT, RTD).
+/* LAB PVGAS Services – calculation core, part 2 (PG, TS, TT, RTD, TG).
  * Ported from the 2026 company workbooks (macros by khainv@pvgas.com.vn); cell references kept in comments:
  *  - PG  : PG_08_Data_Rev2026_Oct-2026.xlsm  sheet Data08 (ĐLVN 08:2011 – verification, no uncertainty)
  *  - TS  : LFS_TS 09 2026.xls                sheet DLVNTM13 + DataTM13 (DVK.LAB.TM.13)
  *  - TT  : 1.TT_LFS_CM_26.xls                sheet DLVN188.2-2 + "STDEV calc" + Data188 (DVK.LAB.TM.12)
  *  - RTD : RTD_DK_CM_2026_.xls               sheet "DLVN125 NK chuan + do Ohm" + Data125 (ĐLVN 125:2003)
+ *  - TG  : TG_GPP 08-2026_Phuoc_.xlsm        sheet DLVN138.2-1 + "STDEV Calc" + Data138 (ĐLVN 138:2004) – checked against the 45 GPP 08/2026 records
  * The workbooks were supplied as samples (2026-10-30): logic is ported, numbers are not yet cross-checked.
  */
 (function (root) {
@@ -174,7 +175,59 @@
     return { type: "RTD", k, n, sens, T, Rm, Si, q, cu, fit, Rfit, res, ss, Q34, Q35, Q36, Q38, O33, G34, G35, G36, G37, G38, G39, U, R0, A, B, C: Cc, rows, maxE, lim, pass, neg, useCu };
   }
 
-  const api = { calcPG, calcTS, calcTT, calcRTD, pt100, polyfit };
+  /* ---------------- TG – ĐLVN 138:2004 (DLVN138.2-1 + 'STDEV Calc' + Data138) ----------------
+   * TG_GPP 08-2026_Phuoc_.xlsm. 5 points × 3 readings, standard and DUT both in °C, rising and falling. */
+  function calcTG(inp) {
+    const { min, max, acc, k = 2 } = inp;
+    const n = 3;                                                          // F24
+    const F7 = inp.analog === false ? 0.5 : 1;                            // F7: 1 = Analog, 0.5 = Digital
+    const res = inp.res || 0;                                             // F6 smallest division
+    const P = inp.pts.map(p => ({ sr: p.sr.map(Number), sf: p.sf.map(Number), dr: p.dr.map(Number), df: p.df.map(Number) }));
+    const m = P.length;
+    // I21:M23 – range of each point from its 1st rising standard reading (row 28)
+    const cls = P.map(p => { const t = p.sr[0]; return t <= 150 ? "low" : t > 400 ? "high" : "mid"; });
+    const nL = cls.filter(c => c === "low").length, nM = cls.filter(c => c === "mid").length, nH = cls.filter(c => c === "high").length;
+    // 'STDEV Calc' tables: low = first nL points, mid = next nM points, high = last nH points
+    const idx = { low: [...Array(nL).keys()], mid: [...Array(nM).keys()].map(i => i + nL), high: [...Array(nH).keys()].map(i => m - nH + i) };
+    const pt = P.map(p => {
+      const sSr = stdev(p.sr), sSf = stdev(p.sf), sDr = stdev(p.dr), sDf = stdev(p.df);
+      const stdT = mean([mean(p.sr), mean(p.sf)]);                        // G55 = AVERAGE(F31:G31)
+      const rise = mean(p.dr), fall = mean(p.df);                         // I55 / K55
+      return { sSr, sSf, sDr, sDf, stdT, rise, fall, corr: stdT - rise, cF: stdT - fall, hyst: Math.abs(fall - rise) };   // M55 = G55 − I55 (rising only)
+    });
+    const ubk3 = F7 * res / S3;                                           // F48 = (F7·F6)/√3
+    const rng = (key, cnt, uStd, heat) => {
+      if (!cnt) return { cnt: 0, UltbS: 0, UltbD: 0, hyst: 0, uch4: 0, uch1: 0, uch2: 0, uch3: 0, uch: 0, ubk2: 0, ubk1: 0, ubk3: 0, uDUT: 0, uc: 0, U: 0 };
+      const ii = idx[key];
+      const UltbS = rms(ii.flatMap(i => [pt[i].sSr, pt[i].sSf]));         // F33/H33/J33
+      const UltbD = rms(ii.flatMap(i => [pt[i].sDr, pt[i].sDf]));         // F45/H45/J45
+      const hyst = Math.max(...ii.map(i => pt[i].hyst));                  // 'STDEV Calc'!C40:H45
+      const uch4 = UltbS / Math.sqrt(n), uch1 = (uStd || 0) / k, uch2 = 0, uch3 = uHeat(heat);   // row 34–37 (uch2 BlackStack: SPRT only)
+      const uch = Math.sqrt(uch4 ** 2 + uch1 ** 2 + uch3 ** 2 + uch2 ** 2);
+      const ubk2 = UltbD / Math.sqrt(n), ubk1 = hyst / (2 * S3);          // F46 / F47
+      const uDUT = Math.sqrt(ubk2 ** 2 + ubk1 ** 2 + ubk3 ** 2);
+      const uc = Math.sqrt(uch ** 2 + uDUT ** 2);
+      return { cnt, UltbS, UltbD, hyst, uch4, uch1, uch2, uch3, uch, ubk2, ubk1, ubk3, uDUT, uc, U: 2 * uc };   // F51 = 2·F50
+    };
+    const s1 = inp.s1 || {}, s2 = inp.s2 || {};
+    // low: Stand1 (F14) + heat source 1 (F17); mid and high: Stand2 (G14) + heat source 2 (G17/H17)
+    const R = { low: rng("low", nL, s1.unc, s1), mid: rng("mid", nM, s2.unc, s2), high: rng("high", nH, s2.unc, s2) };
+    // Data138!CT:CX labels = standard rounded to whole °C; DV/DW/DX range lines (low line only when nL ≥ 2)
+    const lab = pt.map(p => Math.round(xr(p.stdT, 2)));
+    const ED = nL <= 1 ? lab[0] : lab[nL - 1];
+    const EE = nM === 0 ? ED : lab[nL + nM - 1];
+    const lines = [];
+    if (nL > 1) lines.push({ key: "low", from: lab[0], to: ED, U: R.low.U });
+    if (nM) lines.push({ key: "mid", from: ED, to: EE, U: R.mid.U });
+    if (nH) lines.push({ key: "high", from: EE, to: lab[m - 1], U: R.high.U });
+    const maxSHC = Math.max(...pt.map(p => Math.abs(p.corr)));            // EB = MAX(ABS(SHC))
+    const lim = acc / 100 * (max - min);                                  // DZ = M/100·(G−F)
+    const Umax = Math.max(R.low.U, R.mid.U, R.high.U);
+    const pass = !(Math.max(Umax, maxSHC) > lim);                         // EG
+    return { type: "TG", k, n, F7, res, cls, nL, nM, nH, pt, ubk3, R, lines, maxSHC, lim, pass, Umax, lowSingle: nL === 1 };
+  }
+
+  const api = { calcPG, calcTS, calcTT, calcRTD, calcTG, pt100, polyfit };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.LabCalc2 = api;
 })(typeof self !== "undefined" ? self : this);
