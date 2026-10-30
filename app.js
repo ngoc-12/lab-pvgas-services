@@ -101,6 +101,47 @@
   function makerSel(h) { return h.makerSel || (MAKERS.includes(h.maker) ? h.maker : (h.maker ? OTHER : "")); }
   function yy() { const d = D.toDate(rec.h.calDate) || new Date(); return String(d.getFullYear()).slice(2); }
   // PS: QTG ghi Áp tác động / Áp trả về theo chiều tác động -> P.High (tăng áp) / P.Low (giảm áp) cho sheet DLVN133
+  /* Số chữ số thập phân chuẩn hiển thị được (yêu cầu 30/10/2026: số đọc chuẩn không được nhiều chữ số hơn màn hình của chuẩn).
+   * Áp suất: màn hình có D chữ số (D = số chữ số phần nguyên của Max + số lẻ của độ phân giải trên GCN), giống bảng đơn vị của
+   * Fluke 700G (5 chữ số, giới hạn 100 000 counts), Crystal XP2i (5) và Beamex MC6/EXT (5–6): đổi đơn vị thì số lẻ = D − số chữ số phần nguyên
+   * của Max ở đơn vị đó (Max < 1 tính là 1 chữ số, như 700G02 hiện 0.0689 bar). Kết quả < 0 = chuẩn không hiển thị được đơn vị này.
+   * Điện / điện trở: theo thang đo (steps = [[giới hạn thang, độ phân giải]], lấy từ bảng kết quả trên GCN). Nhiệt độ: độ phân giải °C. */
+  const decOf = v => { const x = parseFloat(String(v).replace(",", ".")); return x > 0 ? Math.max(0, Math.round(-Math.log10(x))) : null; };
+  const intDig = x => { x = Math.abs(x); return x < 1 ? 1 : Math.floor(Math.log10(x) + 1e-9) + 1; };
+  const typedDec = v => (String(v).trim().replace(",", ".").split(".")[1] || "").replace(/[^0-9]/g, "").length;
+  function standDec(s, unit, value) {
+    if (!s) return null;
+    if (s.dec && s.dec[unit] != null) return s.dec[unit];
+    if (s.kind === "p") {
+      if (s.name === "Deadweight Tester") return null;           // quả cân: áp suất tính từ khối lượng, không có màn hình
+      const d0 = decOf(s.res), f = C.factor(s.unit, unit); if (d0 == null || !isFinite(f)) return null;
+      const fs = Math.max(Math.abs(s.min), Math.abs(s.max));
+      return intDig(fs) + d0 - intDig(fs * f);
+    }
+    if (s.steps && s.steps.length) { const v = Math.abs(num(value)) || 0; const st = s.steps.find(x => v <= x[0]) || s.steps[s.steps.length - 1]; return decOf(st[1]); }
+    if (s.kind === "t") return unit === "°C" ? decOf(s.res) : null;
+    if (s.kind === "e" || s.kind === "r") return decOf(s.res);
+    return null;
+  }
+  // vals: chuỗi người dùng nhập; lỗi khi nhiều chữ số lẻ hơn chuẩn hiển thị (điện trở chỉ cảnh báo – xem review/stand_digits)
+  function checkDec(s, unit, vals, lab, E, W) {
+    if (!s) return;
+    const bad = [];
+    for (const v of vals.flat()) {
+      if (v === "" || v == null || isNaN(num(v))) continue;
+      const d = standDec(s, unit, v); if (d == null) continue;
+      if (d < 0) { E.push(`${s.key} không hiển thị được đơn vị ${unit} (vượt số chữ số màn hình) – chọn đơn vị khác hoặc chuẩn khác`); return; }
+      if (typedDec(v) > d) bad.push([v, d]);
+    }
+    if (!bad.length) return;
+    const [v, d] = bad[0];
+    const msg = `${lab}: "${v}"${bad.length > 1 ? ` (và ${bad.length - 1} số khác)` : ""} có ${typedDec(v)} chữ số thập phân, nhưng ${s.key} chỉ hiển thị ${d} chữ số ở đơn vị ${unit}${s.kind === "p" ? "" : " (thang đo này)"}`;
+    (s.kind === "r" ? W : E).push(msg);
+  }
+  function decHint(list) {
+    const parts = list.filter(([s]) => s).map(([s, unit, sample]) => { const d = standDec(s, unit, sample); return d == null ? `${s.key}: không giới hạn (không có màn hình / chưa có số liệu)` : d < 0 ? `${s.key}: KHÔNG hiển thị được ${unit}` : `${s.key}: tối đa ${d} chữ số thập phân (${unit}${s.steps ? ", tuỳ thang đo" : ""})`; });
+    return parts.length ? `<div class="hint wide">Số đọc chuẩn – ${parts.map(esc).join(" · ")}</div>` : "";
+  }
   function psHL(r) { const rising = r.h.dirQTG !== "Falling"; const S = r.ps.set.map(num), R = r.ps.reset.map(num); return rising ? { H: S, L: R } : { H: R, L: S }; }
   function autoCertNo() {
     const S0 = settings[rec.type], pg = rec.type === "PG";
@@ -117,7 +158,8 @@
   const curRec = () => rec;
   function compute(target) {
     const rec = target || curRec();   // hồ sơ đang nhập, hoặc hồ sơ đã lưu (bảng kiểm tra QC)
-    const h = rec.h, out = { errors: [], warns: [], res: null };
+    // Hồ sơ đã lưu (danh sách QC) vẫn tính được: lỗi số chữ số thập phân chỉ thành cảnh báo
+    const h = rec.h, out = { errors: [], warns: [], res: null, strict: !target };
     if (NEWT.includes(rec.type)) return computeNew(rec, out);
     const s1 = standById(h.stand1), s2 = standById(h.stand2);
     if (!h.tag) out.errors.push("Chưa nhập Tag");
@@ -137,6 +179,8 @@
         if (!(acc > 0)) out.errors.push("Chưa nhập độ chính xác %FS");
         const P = rec.pt.points.map(num), R = rec.pt.rise.map(num), F = rec.pt.fall.map(num);
         if (P.some(isNaN)) out.errors.push("Thiếu áp suất chuẩn ở điểm đo");
+        checkDec(s1, h.unit, rec.pt.points, "Áp suất chuẩn", out.strict ? out.errors : out.warns, out.warns);
+        checkDec(s2, "mA", [rec.pt.rise, rec.pt.fall], "Số đọc mA", out.strict ? out.errors : out.warns, out.warns);
         if (R.some(isNaN)) out.errors.push("Thiếu số đọc chiều Tăng");
         if (F.some(isNaN)) out.errors.push("Thiếu số đọc chiều Giảm");
         if (s1 && mx > mn) { const f = C.factor(s1.unit, h.unit); if (Math.max(...P.filter(isFinite)) > s1.max * f * 1.0000001 || Math.min(...P.filter(isFinite)) < s1.min * f - 1e-9) out.warns.push("Điểm đo nằm ngoài phạm vi chuẩn Stand1"); }
@@ -150,6 +194,7 @@
         const { H, L } = psHL(rec);
         if (rec.ps.set.map(num).some(isNaN)) out.errors.push("Thiếu Áp tác động (Set-Pressure)");
         if (rec.ps.reset.map(num).some(isNaN)) out.errors.push("Thiếu Áp trả về (Reset-Pressure)");
+        checkDec(s1, h.unitPset, [rec.ps.set, rec.ps.reset], "Áp suất chuẩn (Set/Reset)", out.strict ? out.errors : out.warns, out.warns);
         if (!out.errors.length) {
           out.res = C.calcPS({ pset, unitPset: h.unitPset, acc, high: H, low: L, stand1: { ...s1, deadweight: s1.name === "Deadweight Tester" }, resolution: num(h.resolution) || 0 });
           if (h.dirQTG && h.dirQTG !== out.res.dir) out.warns.push(`QTG đánh dấu ${h.dirQTG} nhưng số liệu cho thấy công tắc tác động chiều ${out.res.dir} (sheet DLVN133 ô E9 tự chọn theo độ lệch nhỏ hơn) – kiểm tra lại cột Set/Reset`);
@@ -162,7 +207,7 @@
 
   // PG / TS / TT / RTD – formulas in calc2.js
   function computeNew(rec, out) {
-    const h = rec.h, T = rec.type, E = out.errors, W = out.warns;
+    const h = rec.h, T = rec.type, E = out.errors, W = out.warns, ED = out.strict ? E : W;
     const s1 = standById(h.stand1), s2 = standById(h.stand2), s3 = standById(h.stand3);
     const mn = num(h.min), mx = num(h.max), acc = num(h.acc);
     const need = (s, lab) => { if (!s) E.push(`Chưa chọn ${lab}`); else if (s.due && h.calDate && s.due < h.calDate) W.push(`Chuẩn ${s.key} hết hạn ${s.due}, trước ngày hiệu chuẩn`); };
@@ -179,6 +224,7 @@
         if (s1 && !isFinite(C.factor(s1.unit, h.unit))) E.push(`Không đổi được đơn vị ${s1.unit} → ${h.unit}`);
         const std = nums(rec.pg.std, "áp suất chuẩn"), rise = nums(rec.pg.rise, "số đọc chiều Tăng"), fall = nums(rec.pg.fall, "số đọc chiều Giảm");
         if (!(num(h.scale) > 0)) W.push("Chưa nhập vạch chia (in trên GCN và QTG)");
+        checkDec(s1, h.unit, rec.pg.std, "Áp suất chuẩn", ED, W);
         if (s1 && mx > mn && isFinite(C.factor(s1.unit, h.unit))) { const f = C.factor(s1.unit, h.unit); if (Math.max(...std.filter(isFinite)) > s1.max * f * 1.0000001) W.push("Điểm đo vượt phạm vi chuẩn Stand1"); }
         if (!E.length) {
           out.res = C2.calcPG({ min: mn, max: mx, acc, std, rise, fall, before: rec.pg.before, after: rec.pg.after });
@@ -189,11 +235,14 @@
         need(s1, "nhiệt kế chuẩn / thiết bị tạo nhiệt (Stand1)");
         const tset = num(h.tset); if (isNaN(tset)) E.push("Chưa nhập nhiệt độ đặt Tset");
         const set = nums(rec.ts.set, "nhiệt độ tác động (Set)"), reset = nums(rec.ts.reset, "nhiệt độ trả về (Reset)");
+        checkDec(s1, "°C", [rec.ts.set, rec.ts.reset], "Nhiệt độ chuẩn", ED, W);
         if (!E.length) out.res = C2.calcTS({ tset, acc, dir: h.dirQTG, set, reset, stand: { unc: s1.unc }, heat: s1 });
       } else if (T === "TT") {
         need(s1, "chuẩn nhiệt dải thấp (Stand1)"); need(s3, "ampe kế (Stand3)"); if (s2) need(s2, "");
         const flat = k => rec.tt[k].flat();
         nums(flat("sr"), "số đọc chuẩn chiều tăng"); nums(flat("sf"), "số đọc chuẩn chiều giảm"); nums(flat("dr"), "số đọc DUT chiều tăng"); nums(flat("df"), "số đọc DUT chiều giảm");
+        [s1, s2].forEach(s => checkDec(s, "°C", [flat("sr"), flat("sf")], "Nhiệt độ chuẩn", ED, W));
+        checkDec(s3, "mA", [flat("dr"), flat("df")], "Số đọc mA (ampe kế)", ED, W);
         if (!E.length) {
           const pts = rec.tt.sr.map((_, p) => ({ sr: rec.tt.sr[p].map(num), sf: rec.tt.sf[p].map(num), dr: rec.tt.dr[p].map(num), df: rec.tt.df[p].map(num) }));
           out.res = C2.calcTT({ min: mn, max: mx, acc, pts, s1, s2: s2 || s1, amm: { unc: s3.unc, uncUnit: s3.uncUnit, min: s3.min, max: s3.max, err: s3.err || 0 }, res: num(h.res) || 0 });
@@ -204,6 +253,8 @@
       } else if (T === "RTD") {
         need(s1, "chuẩn nhiệt dải thấp (Stand1)"); need(s3, "thiết bị đo điện trở (Stand3)"); if (s2) need(s2, "");
         const std = nums(rec.rtd.std, "nhiệt độ chuẩn"); nums(rec.rtd.dut.flat(), "số đọc điện trở");
+        [s1, s2].forEach(s => checkDec(s, "°C", rec.rtd.std, "Nhiệt độ chuẩn", ED, W));
+        checkDec(s3, "Ω", rec.rtd.dut, "Số đọc điện trở", ED, W);
         const sens = num(h.sens) || 0.385;
         if (!E.length) {
           out.res = C2.calcRTD({ min: mn, max: mx, acc, sens, pts: std.map((t, i) => ({ std: t, dut: rec.rtd.dut[i].map(num) })), s1, s2: s2 || s1, meter: { unc: s3.unc, uncUnit: s3.uncUnit, max: s3.max, err: s3.err || 0 } });
@@ -280,6 +331,7 @@
         ${fld("Chuẩn áp suất (Stand1)", "h.stand1", { options: standOptions("p"), wide: 1 })}
         ${PT ? fld("Chuẩn điện (Stand2)", "h.stand2", { options: standOptions("e"), wide: 1 }) : ""}
         <div class="hint wide">Danh mục chuẩn 2026 (sheet Stand Ref). Hiệu chỉnh áp suất: <b>Yes</b> – số đọc chuẩn dùng trực tiếp như toàn bộ hồ sơ DGCP 10/2026.</div>
+        ${decHint([[standById(h.stand1), PT ? h.unit : h.unitPset], [PT ? standById(h.stand2) : null, "mA", 20]])}
       </div>`;
     let pts;
     if (PT) {
@@ -355,15 +407,15 @@
       </div>`;
     let std;
     if (T === "PG") std = `<div class="grid">${fld("Chuẩn áp suất (Stand1)", "h.stand1", { options: standOptions("p"), wide: 1 })}
-        <div class="hint wide">Số đọc chuẩn nhập theo đơn vị của áp kế (${esc(u)}). Kiểm định theo ĐLVN 08:2011 – không tính độ KĐBĐ.</div></div>`;
+        <div class="hint wide">Số đọc chuẩn nhập theo đơn vị của áp kế (${esc(u)}). Kiểm định theo ĐLVN 08:2011 – không tính độ KĐBĐ.</div>${decHint([[standById(h.stand1), u]])}</div>`;
     if (T === "TS") std = `<div class="grid">${fld("Nhiệt kế chuẩn / thiết bị tạo nhiệt (Stand1)", "h.stand1", { options: standOptions("t"), wide: 1 })}
-        <div class="hint wide">U của chuẩn (uch1) và độ ổn định / radial / axial của thiết bị tạo nhiệt (uch3) lấy từ thư viện chuẩn.</div></div>`;
+        <div class="hint wide">U của chuẩn (uch1) và độ ổn định / radial / axial của thiết bị tạo nhiệt (uch3) lấy từ thư viện chuẩn.</div>${decHint([[standById(h.stand1), "°C"]])}</div>`;
     if (T === "TT") std = `<div class="grid">${fld("Chuẩn nhiệt dải thấp ≤150 °C (Stand1)", "h.stand1", { options: standOptions("t"), wide: 1 })}
         ${fld("Chuẩn nhiệt dải trung / cao (Stand2, trống = Stand1)", "h.stand2", { options: standOptions("t"), wide: 1 })}
-        ${fld("Ampe kế (Stand3)", "h.stand3", { options: standOptions("e"), wide: 1 })}</div>`;
+        ${fld("Ampe kế (Stand3)", "h.stand3", { options: standOptions("e"), wide: 1 })}${decHint([[standById(h.stand1), "°C"], [standById(h.stand2), "°C"], [standById(h.stand3), "mA", 20]])}</div>`;
     if (T === "RTD") std = `<div class="grid">${fld("Chuẩn nhiệt dải thấp (Stand1)", "h.stand1", { options: standOptions("t"), wide: 1 })}
         ${fld("Chuẩn nhiệt dải cao ≥150 °C (Stand2, trống = Stand1)", "h.stand2", { options: standOptions("t"), wide: 1 })}
-        ${fld("Thiết bị đo điện trở (Stand3)", "h.stand3", { options: standOptions("r"), wide: 1 })}</div>`;
+        ${fld("Thiết bị đo điện trở (Stand3)", "h.stand3", { options: standOptions("r"), wide: 1 })}${decHint([[standById(h.stand1), "°C"], [standById(h.stand2), "°C"], [standById(h.stand3), "Ω", 150]])}</div>`;
     const inp = (p, v, ph) => `<input data-p="${p}" inputmode="decimal" value="${esc(v)}"${ph ? ` placeholder="${ph}"` : ""}>`;
     const sgn = (p, v) => `<div class="pm">${inp(p, v)}<button type="button" class="pmb sm" data-neg="${p}" aria-label="Đổi dấu">±</button></div>`;
     let pts, ptsTitle;
@@ -460,7 +512,7 @@
     if (p.startsWith("pt.points") || p.startsWith("pg.std") || p.startsWith("tt.nom")) rec.ptAuto = false;
     if (["PT", "PG", "TT"].includes(rec.type) && (p === "h.min" || p === "h.max") && rec.ptAuto) { genPoints(); renderEntry(); focusPath(p); }
     else if (p === "h.psType" && rec.type === "TS") { renderEntry(); focusPath(p); }
-    else if (p === "h.unit" || p === "h.unitPset" || p === "h.description" || p === "h.calDate" || p === "h.dirQTG" || p === "h.location" || p === "h.locFree") {
+    else if (p === "h.unit" || p === "h.unitPset" || p === "h.description" || p === "h.calDate" || p === "h.dirQTG" || p === "h.location" || p === "h.locFree" || p.startsWith("h.stand")) {
       if (p === "h.calDate" && rec.certAuto) rec.certNo = autoCertNo();
       renderEntry(); focusPath(p);
     } else renderResult();
@@ -695,7 +747,7 @@
   function renderStands() {
     const today = todayISO();
     const row = s => `<div class="rec"><div><b>${esc(s.key)}</b> <span class="tag">${KINDS[s.kind] || s.kind}</span>${s.loc ? ` <span class="tag loc">${esc(s.loc)}</span>` : ""} <span class="${s.due && s.due >= today ? "ok" : "bad"}">${s.due && s.due >= today ? "Còn hạn " + s.due : "Hết hạn " + (s.due || "?")}</span><br>
-      <small class="mut">${esc(s.name)} · ${esc(s.maker)} ${esc(s.model)} · S/N ${esc(s.serial)} · (${s.min}÷${s.max}) ${esc(s.unit)} · U = ${s.unc} ${esc(s.uncUnit)}${s.rdg ? (s.kind === "p" ? ` + ${s.rdg}%Rdg` : ` · sai số ${s.rdg} ${esc(s.unit)}`) : ""}${s.err && s.kind === "r" ? ` · sai số ${s.err} Ω` : ""}${s.cert ? ` · GCN ${esc(s.cert)}` : ""} · ${esc(s.trace || "")}</small>${s.note ? `<br><small class="${/CHỈ DÙNG|nghi|cần chốt/.test(s.note) ? "bad" : "mut"}">${esc(s.note)}</small>` : ""}</div>
+      <small class="mut">${esc(s.name)} · ${esc(s.maker)} ${esc(s.model)} · S/N ${esc(s.serial)} · (${s.min}÷${s.max}) ${esc(s.unit)} · U = ${s.unc} ${esc(s.uncUnit)}${s.rdg ? (s.kind === "p" ? ` + ${s.rdg}%Rdg` : ` · sai số ${s.rdg} ${esc(s.unit)}`) : ""}${s.err && s.kind === "r" ? ` · sai số ${s.err} Ω` : ""}${s.cert ? ` · GCN ${esc(s.cert)}` : ""} · ${esc(s.trace || "")}</small>${dispTxt(s) ? `<br><small class="mut">Hiển thị (số chữ số thập phân): ${esc(dispTxt(s))}</small>` : ""}${s.note ? `<br><small class="${/CHỈ DÙNG|nghi|cần chốt/.test(s.note) ? "bad" : "mut"}">${esc(s.note)}</small>` : ""}</div>
       <div class="ra"><button class="btn sm" data-s="edit" data-id="${s.id}">Sửa</button></div></div>`;
     const form = editStand ? standForm(editStand) : "";
     $("#v-stands").innerHTML = `${form}<div class="card"><h2>Thư viện chuẩn</h2>
@@ -703,6 +755,11 @@
       <div class="btns">${["", "p", "e", "t", "r"].map(k => `<button class="btn sm${standKind === k ? " pri" : ""}" data-s="kind" data-k="${k}">${k ? KINDS[k] : "Tất cả"}</button>`).join("")}</div>
       <div class="btns"><button class="btn pri" data-s="add">Thêm chuẩn</button><button class="btn" data-s="reset">Khôi phục danh sách gốc</button></div>
       ${stands.filter(s => !standKind || s.kind === standKind).map(row).join("")}</div>`;
+  }
+  function dispTxt(s) {
+    if (s.kind === "p") { if (s.name === "Deadweight Tester") return ""; return ["bar", "mbar", "kPa", "MPa", "psi", "kg/cm2"].map(u => { const d = standDec(s, u); return d == null ? "" : `${u} ${d < 0 ? "—" : d}`; }).filter(Boolean).join(" · "); }
+    if (s.steps) return s.steps.map(([lim, st]) => `≤${lim} ${s.unit}: ${decOf(st)}`).join(" · ");
+    const d = standDec(s, s.unit); return d == null ? "" : `${s.unit} ${d}`;
   }
   function standForm(s) {
     const f = (lab, k, o = {}) => `<label class="f${o.wide ? " wide" : ""}"><span>${lab}</span>${o.options ? `<select data-k="${k}">${o.options.map(v => `<option${String(v) === String(s[k]) ? " selected" : ""}>${v}</option>`).join("")}</select>` : `<input data-k="${k}" value="${esc(s[k] == null ? "" : s[k])}" ${o.type ? `type="${o.type}"` : ""} ${o.num ? 'inputmode="decimal"' : ""}>`}</label>`;
