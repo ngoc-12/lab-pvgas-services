@@ -116,7 +116,7 @@
       const pd = C.pubDec(rec.pt.points, 3), dR = C.pubDec(res.rows.map(r => r.rise), 3), dF = C.pubDec(res.rows.map(r => r.fall), 3), u = esc(h.unit);
       const rows = res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(r.x, pd)}</td><td>${vn(r.ideal, 3)}</td><td>${vn(r.rise, dR)}</td><td>${vn(r.fall, dF)}</td><td>${vn(r.shcR, dR)}</td><td>${vn(r.shcF, dF)}</td><td>${uTxt("PT", r.U)}</td></tr>`).join("");
       table = `<table class="res cres"><thead>
-        <tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">AS đặt<br>${it("(Input Pressure)")}<br>${u}</th><th rowspan="2">Tín hiệu điện quy đổi<br>${it("(Ideal Output Current)")}<br>mA</th>
+        <tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp suất đặt<br>${it("(Input Pressure)")}<br>${u}</th><th rowspan="2">Tín hiệu điện quy đổi<br>${it("(Ideal Output Current)")}<br>mA</th>
         <th colspan="2">Giá trị dòng trên thiết bị<br>${it("(Measured Output Current)")}<br>mA</th><th colspan="2">Số hiệu chính<br>${it("(Correction)")}<br>mA</th><th rowspan="2">Độ KĐBĐ<br>${it("(Uncertainty)")}<br>${u}</th></tr>
         <tr><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th></tr></thead><tbody>${rows}</tbody></table>`;
       mid = `<p><u>Công thức hiệu chuẩn</u> ${it("<u>(Calibration equation)</u>")}: y = ${vn(res.a, 3)} + ${vn(res.b, 3)} x</p>
@@ -128,7 +128,7 @@
       // PS: dot decimal, decimals per reading set (M = 2), deviations follow their set
       const dS = C.pubDec(res.set, 2), dR = C.pubDec(res.reset, 2), u = esc(h.unitPset), U = res.Utext.text, ps = (v, d) => nTxt("PS", v, d);
       const rows = res.set.map((v, i) => `<tr><td>${p2(i + 1)}</td>${i === 0 ? `<td rowspan="5">${esc(dot(h.pset))}</td>` : ""}<td>${ps(v, dS)}</td><td>${ps(res.reset[i], dR)}</td><td>${ps(res.setDev[i], dS)}</td><td>${ps(res.resetDev[i], dR)}</td>${i === 0 ? `<td rowspan="5">${U}</td>` : ""}</tr>`).join("");
-      table = `<table class="res cres"><thead><tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp suất đặt ${it("(Pset)")}<br>${u}</th><th rowspan="2">As tác động<br>${it("(Set-Pressure)")}<br>${u}</th><th rowspan="2">As trả về<br>${it("(Reset-Pressure)")}<br>${u}</th>
+      table = `<table class="res cres"><thead><tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp suất đặt ${it("(Pset)")}<br>${u}</th><th rowspan="2">Áp suất tác động<br>${it("(Set-Pressure)")}<br>${u}</th><th rowspan="2">Áp suất trả về<br>${it("(Reset-Pressure)")}<br>${u}</th>
         <th colspan="2">Áp suất chênh lệch</th><th rowspan="2">Độ KĐBĐ<br>${it("(Uncertainty)")}<br>${u}</th></tr>
         <tr><th>${it("Set-deviation")}<br>${u}</th><th>${it("Reset-deviation")}<br>${u}</th></tr></thead><tbody>${rows}</tbody></table>`;
       mid = `<p>Độ không đảm bảo đo mở rộng được tính ứng với độ tin cậy 95%, hệ số phủ k=2:<br>${it("(The reported expanded uncertainty is based upon a standard uncertainty multiplied by a coverage factor k = 2, providing a level of confidence of approximate 95%):")}</p>
@@ -221,7 +221,7 @@
       const pd = pDec([h.pset, ...rec.ps.set, ...rec.ps.reset]);
       data = `<table class="res qres ps"><thead>
         <tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp suất đặt<br>${it("(P<sub>set</sub>)")}<br><br>${esc(h.unitPset)}</th><th colspan="2">Áp suất hiển thị trên thiết bị chuẩn<br>${it("(Standard Pressure)")}</th><th rowspan="2">Chênh tác động<br>${it("(Set-deviation)")}</th><th rowspan="2">Chênh trả lại<br>${it("(Reset-deviation)")}</th></tr>
-        <tr><th>Áp tác động<br>${it("(Set-Pressure)")}</th><th>Áp trả về<br>${it("(Reset-Pressure)")}</th></tr></thead><tbody>
+        <tr><th>Áp suất tác động<br>${it("(Set-Pressure)")}</th><th>Áp suất trả về<br>${it("(Reset-Pressure)")}</th></tr></thead><tbody>
         ${rec.ps.set.map((v, i) => { const sv = num(v), rv = num(rec.ps.reset[i]), ps = num(h.pset); return `<tr><td>${p2(i + 1)}</td>${i === 0 ? `<td rowspan="5">${esc(h.pset)}</td>` : ""}<td>${vn(sv, pd)}</td><td>${vn(rv, pd)}</td><td>${vn(ps - sv, pd)}</td><td>${vn(ps - rv, pd)}</td></tr>`; }).join("")}</tbody></table>`;
     }
     return `<section class="a4 qtg">${wmImg}${draft(info)}${qtgHeader(st, PT)}
@@ -302,7 +302,7 @@
           ${r3("F26", "8.1 uA áp suất mở", g(res.F26, 6))}${r3("F27", "uA áp suất đóng", g(res.F27, 6))}
           ${r3("F31", "8.2 uB của chuẩn", g(res.F31, 6))}${r3("F32", "uB độ phân giải = E8/2", g(res.F32, 6))}
         </table><table class="ukv">
-          ${r3("F34", "8.3 uc AS mở", g(res.F34, 6))}${r3("F35", "uc AS đóng", g(res.F35, 6))}
+          ${r3("F34", "8.3 uc áp suất mở", g(res.F34, 6))}${r3("F35", "uc áp suất đóng", g(res.F35, 6))}
           ${r3("F37", "8.4 U mở = E18·F34", g(res.F37, 6))}${r3("F38", "U đóng = E18·F35", g(res.F38, 6))}
           ${r3("I42", "U báo cáo (theo chiều " + res.dir + ")", g(res.U, 6), esc(h.unitPset))}${r3("", "In chứng chỉ (2 chữ số có nghĩa, làm tròn lên)", `<b>${res.Utext.text}</b>`, esc(h.unitPset))}
         </table></div>`;

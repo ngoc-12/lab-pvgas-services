@@ -100,7 +100,7 @@
   }
   function makerSel(h) { return h.makerSel || (MAKERS.includes(h.maker) ? h.maker : (h.maker ? OTHER : "")); }
   function yy() { const d = D.toDate(rec.h.calDate) || new Date(); return String(d.getFullYear()).slice(2); }
-  // PS: QTG ghi Áp tác động / Áp trả về theo chiều tác động -> P.High (tăng áp) / P.Low (giảm áp) cho sheet DLVN133
+  // PS: QTG ghi Áp suất tác động / Áp suất trả về theo chiều tác động -> P.High (tăng áp) / P.Low (giảm áp) cho sheet DLVN133
   /* Số chữ số thập phân chuẩn hiển thị được (yêu cầu 30/10/2026: số đọc chuẩn không được nhiều chữ số hơn màn hình của chuẩn).
    * Áp suất: màn hình có D chữ số (D = số chữ số phần nguyên của Max + số lẻ của độ phân giải trên GCN), giống bảng đơn vị của
    * Fluke 700G (5 chữ số, giới hạn 100 000 counts), Crystal XP2i (5) và Beamex MC6/EXT (5–6): đổi đơn vị thì số lẻ = D − số chữ số phần nguyên
@@ -192,8 +192,8 @@
         if (!(pset > 0 || pset < 0)) out.errors.push("Chưa nhập Pset");
         if (!(acc > 0)) out.errors.push("Chưa nhập độ chính xác % Pset");
         const { H, L } = psHL(rec);
-        if (rec.ps.set.map(num).some(isNaN)) out.errors.push("Thiếu Áp tác động (Set-Pressure)");
-        if (rec.ps.reset.map(num).some(isNaN)) out.errors.push("Thiếu Áp trả về (Reset-Pressure)");
+        if (rec.ps.set.map(num).some(isNaN)) out.errors.push("Thiếu Áp suất tác động (Set-Pressure)");
+        if (rec.ps.reset.map(num).some(isNaN)) out.errors.push("Thiếu Áp suất trả về (Reset-Pressure)");
         checkDec(s1, h.unitPset, [rec.ps.set, rec.ps.reset], "Áp suất chuẩn (Set/Reset)", out.strict ? out.errors : out.warns, out.warns);
         if (!out.errors.length) {
           out.res = C.calcPS({ pset, unitPset: h.unitPset, acc, high: H, low: L, stand1: { ...s1, deadweight: s1.name === "Deadweight Tester" }, resolution: num(h.resolution) || 0 });
@@ -341,12 +341,12 @@
           <td><input data-p="pt.rise.${i}" inputmode="decimal" value="${esc(rec.pt.rise[i])}" placeholder="mA"></td>
           <td><input data-p="pt.fall.${i}" inputmode="decimal" value="${esc(rec.pt.fall[i])}" placeholder="mA"></td></tr>`;
       }).join("");
-      pts = `<table class="entry"><thead><tr><th>#</th><th>AS chuẩn<br>${esc(h.unit)}</th><th>mA lý tưởng</th><th>Tăng ↑<br>mA</th><th>Giảm ↓<br>mA</th></tr></thead><tbody>${rows}</tbody></table>
+      pts = `<table class="entry"><thead><tr><th>#</th><th>Áp suất chuẩn<br>${esc(h.unit)}</th><th>mA lý tưởng</th><th>Tăng ↑<br>mA</th><th>Giảm ↓<br>mA</th></tr></thead><tbody>${rows}</tbody></table>
         <div class="btns"><button class="btn" data-act="pts">Điểm 0-25-50-75-100%</button><button class="btn pri" data-act="sync">⇅ Đồng bộ Tăng / Giảm</button></div>`;
     } else {
       const rows = rec.ps.set.map((v, i) => `<tr><td class="n">${i + 1}</td><td><input data-p="ps.set.${i}" inputmode="decimal" value="${esc(v)}"></td><td><input data-p="ps.reset.${i}" inputmode="decimal" value="${esc(rec.ps.reset[i])}"></td></tr>`).join("");
-      pts = `<p class="hint">Như QTG: chiều ${h.dirQTG === "Falling" ? "giảm (Falling) – áp tác động đọc khi giảm áp" : "tăng (Rising) – áp tác động đọc khi tăng áp"}.</p>
-        <table class="entry"><thead><tr><th>TT</th><th>Áp tác động<br>(Set) ${esc(h.unitPset)}</th><th>Áp trả về<br>(Reset) ${esc(h.unitPset)}</th></tr></thead><tbody>${rows}</tbody></table>
+      pts = `<p class="hint">Như QTG: chiều ${h.dirQTG === "Falling" ? "giảm (Falling) – áp suất tác động đọc khi giảm áp" : "tăng (Rising) – áp suất tác động đọc khi tăng áp"}.</p>
+        <table class="entry"><thead><tr><th>TT</th><th>Áp suất tác động<br>(Set) ${esc(h.unitPset)}</th><th>Áp suất trả về<br>(Reset) ${esc(h.unitPset)}</th></tr></thead><tbody>${rows}</tbody></table>
         <div class="btns"><button class="btn pri" data-act="copy1">Lần 2–5 = Lần 1</button></div>`;
     }
     let ptsTitle = PT ? "lên / xuống" : "5 lần";
@@ -421,7 +421,7 @@
     let pts, ptsTitle;
     if (T === "PG") {
       const rows = rec.pg.std.map((x, i) => `<tr><td class="n">${i + 1}</td><td>${sgn(`pg.std.${i}`, x)}</td><td>${inp(`pg.rise.${i}`, rec.pg.rise[i])}</td><td>${inp(`pg.fall.${i}`, rec.pg.fall[i])}</td></tr>`).join("");
-      pts = `<table class="entry"><thead><tr><th>#</th><th>AS chuẩn<br>${esc(u)}</th><th>Tăng ↑<br>${esc(u)}</th><th>Giảm ↓<br>${esc(u)}</th></tr></thead><tbody>${rows}</tbody></table>
+      pts = `<table class="entry"><thead><tr><th>#</th><th>Áp suất chuẩn<br>${esc(u)}</th><th>Tăng ↑<br>${esc(u)}</th><th>Giảm ↓<br>${esc(u)}</th></tr></thead><tbody>${rows}</tbody></table>
         <div class="btns"><button class="btn" data-act="pts">Điểm 0-25-50-75-100%</button><button class="btn pri" data-act="syncpg">⇅ Đồng bộ Tăng / Giảm</button></div>
         <div class="grid">${fld(`Sụt áp chuẩn – áp suất kiểm tra (${esc(u)})`, "pg.before", { num: 1 })}${fld(`Áp suất sau (${esc(u)})`, "pg.after", { num: 1 })}</div>`;
       ptsTitle = "lên / xuống";
