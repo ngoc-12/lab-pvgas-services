@@ -1,7 +1,7 @@
 /* LAB PVGAS Services – UI */
 (function () {
   "use strict";
-  const C = window.LabCalc, C2 = window.LabCalc2, D = window.LabDocs, D2 = window.LabDocs2, SEED = window.LabSeed, esc = D.esc;
+  const A = window.LabAuth, C = window.LabCalc, C2 = window.LabCalc2, D = window.LabDocs, D2 = window.LabDocs2, SEED = window.LabSeed, esc = D.esc;
   const NEWT = ["PG", "TS", "TT", "RTD", "TG"], READY = ["PT", "PS"].concat(NEWT), TEMP = ["TS", "TT", "RTD", "TG"];
   const DESC0 = { PT: "Pressure Transmitter", PS: "Pressure Switch", PG: "Pressure Gauge", TS: "Temperature Switch", TT: "Temperature Transmitter", RTD: "Industrial Platinum Resistance Thermometer", TG: "Temperature Indicator" };
   const blank = n => Array(n).fill("");
@@ -96,7 +96,7 @@
       tt: { nom: blank(5), sr: [0, 1, 2, 3, 4].map(() => blank(3)), sf: [0, 1, 2, 3, 4].map(() => blank(3)), dr: [0, 1, 2, 3, 4].map(() => blank(3)), df: [0, 1, 2, 3, 4].map(() => blank(3)) },
       rtd: { std: blank(6), dut: [0, 1, 2, 3, 4, 5].map(() => blank(5)) },
       tg: { nom: blank(5), sr: [0, 1, 2, 3, 4].map(() => blank(3)), sf: [0, 1, 2, 3, 4].map(() => blank(3)), dr: [0, 1, 2, 3, 4].map(() => blank(3)), df: [0, 1, 2, 3, 4].map(() => blank(3)) },
-      sig: { inspector: "", controller: "" }, saved: false
+      sig: { inspector: A.me() ? A.me().name : "", controller: "" }, saved: false
     };
   }
 
@@ -346,7 +346,7 @@
     const v = getPath(rec, path); const id = "f_" + path.replace(/\./g, "_");
     let ctl;
     if (opt.options) ctl = `<select id="${id}" data-p="${path}">${opt.options.map(o => { const [val, txt] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(val)}"${String(val) === String(v) ? " selected" : ""}>${esc(txt)}</option>`; }).join("")}</select>`;
-    else ctl = `<input id="${id}" data-p="${path}" value="${esc(v)}" ${opt.type ? `type="${opt.type}"` : ""} ${opt.num ? 'inputmode="decimal"' : ""} ${opt.list ? `list="${opt.list}"` : ""} placeholder="${esc(opt.ph || "")}" autocomplete="off">`;
+    else ctl = `<input id="${id}" data-p="${path}" value="${esc(v)}" ${opt.type ? `type="${opt.type}"` : ""} ${opt.num ? 'inputmode="decimal"' : ""} ${opt.list ? `list="${opt.list}"` : ""} placeholder="${esc(opt.ph || "")}" autocomplete="off"${opt.ro ? " readonly" : ""}>`;
     if (opt.sign) ctl = `<div class="pm">${ctl}<button type="button" class="pmb" data-neg="${path}" aria-label="Đổi dấu">±</button></div>`;
     return `<label class="f${opt.wide ? " wide" : ""}"><span>${label}</span>${ctl}</label>`;
   }
@@ -365,7 +365,7 @@
           ? fld("Địa điểm 2 – nơi lắp đặt", "h.locFree", { wide: 1, ph: "Theo gói thầu, VD: Giàn …" }) + fld("Cơ sở sử dụng (Customer)", "h.custFree", { wide: 1, ph: "Tên đơn vị sử dụng in trên chứng chỉ" })
           : fld("Địa điểm công trình khí", "h.location", { options: locOpts, wide: 1 }) + fld("Cơ sở sử dụng (để trống = theo danh mục)", "h.custFree", { wide: 1, ph: locInfo(h.location).custVN || "Chưa có trong danh mục – nhập tay" })}
         ${fld("Địa điểm thực hiện (in trên QTG)", "h.calPlace", { ph: h.locMode === "free" ? (h.locFree || "") : h.location })}
-        ${fld("Số chứng chỉ", "certNo", { ph: autoCertNo() })}`;
+        ${fld("Số chứng chỉ", "certNo", { ph: autoCertNo(), ro: !A.can("certNo") })}`;
     let dev = `
       <div class="grid">
         ${locHtml}
@@ -415,7 +415,7 @@
     if (NEWT.includes(rec.type)) ({ dev, std, pts, ptsTitle } = buildNew(locHtml));
     const sig = `<div class="grid">
         ${fld("Người thực hiện (Kiểm định viên)", "sig.inspector", { list: "names" })}
-        ${fld("Người soát lại / kiểm tra (Người kiểm soát)", "sig.controller", { list: "names" })}
+        ${fld("Người soát lại / kiểm tra (Người kiểm soát)", "sig.controller", { list: "names", ro: true, ph: "Điền khi duyệt" })}
         ${fld("Ngày cấp chứng chỉ", "h.issueDate", { type: "date" })}
         ${fld("Ghi chú QTG", "h.note", { wide: 1 })}
         <div class="hint wide">Trang 1 chứng chỉ ký: ${esc(settings.sig1Title)} <b>${esc(settings.sig1Name)}</b> và ${esc(settings.sig2Title)} <b>${esc(settings.sig2Name)}</b> (đổi trong Cài đặt).</div>
@@ -427,6 +427,7 @@
       <div class="card"><h2><i>4</i> Số liệu đo ${ptsTitle}</h2>${pts}</div>
       <div class="card"><h2><i>5</i> Kết quả & ĐKĐBĐ</h2><div id="result"></div></div>
       <div class="card"><h2><i>6</i> Ký tên & xuất hồ sơ</h2>${sig}
+        ${approvalHtml()}
         <div class="btns"><button class="btn pri" data-act="save">Lưu hồ sơ</button><button class="btn" data-act="new">Hồ sơ mới</button></div>
         <div class="btns"><button class="btn pri" data-pdf="cert">Chứng chỉ (2 trang)</button><button class="btn" data-pdf="qtg">Biên bản QTG</button><button class="btn" data-pdf="unc">Bảng Uncer (QC)</button><button class="btn" data-pdf="all">Trọn bộ PDF</button></div>
         <div class="btns"><button class="btn" data-act="preview">Xem trước trọn bộ</button></div>
@@ -587,7 +588,9 @@
   /* ---------- events: entry ---------- */
   function onInput(e) {
     const p = e.target.dataset.p; if (!p) return;
+    if (e.target.readOnly) return;
     setPath(rec, p, e.target.value);
+    const wasApproved = touched();
     if (p === "certNo") rec.certAuto = false;
     if (p === "h.makerSel") { rec.h.maker = e.target.value === OTHER ? "" : e.target.value; renderEntry(); if (e.target.value === OTHER) focusPath("h.maker"); persistCurrent(); return; }
     if (p.startsWith("pt.points") || p.startsWith("pg.std") || p.startsWith("tt.nom")) rec.ptAuto = false;
@@ -598,6 +601,7 @@
       renderEntry(); focusPath(p);
     } else renderResult();
     if (p.startsWith("pt.points") || p === "h.min" || p === "h.max") updateIdeal();
+    if (wasApproved) { renderEntry(); focusPath(p); }
     persistCurrent();
   }
   function focusPath(p) { const el = $(`[data-p="${p}"]`); if (el && el.type !== "date" && el.tagName !== "SELECT") { el.focus(); try { const l = el.value.length; el.setSelectionRange(l, l); } catch (e) { } } }
@@ -634,10 +638,12 @@
     if (b.dataset.type) {
       if (b.dataset.type === rec.type) return;
       const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree, calDate: rec.h.calDate, issueDate: rec.h.issueDate };
-      const sig = rec.sig; rec = newRecord(b.dataset.type); Object.assign(rec.h, keep); rec.sig = sig; rec.certNo = autoCertNo();
+      const sig = rec.sig; rec = newRecord(b.dataset.type); Object.assign(rec.h, keep); rec.sig = { inspector: sig.inspector, controller: "" }; rec.certNo = autoCertNo();
       renderEntry(); persistCurrent(); return;
     }
     const act = b.dataset.act;
+    if (act === "approve" || act === "unapprove") { approve(act === "approve"); return; }
+    if (act && !["save", "new", "preview", "share", "download"].includes(act)) touched();
     if (act === "pts") { genPoints(); rec.ptAuto = true; renderEntry(); }
     if (act === "sync") syncRF();
     if (act === "syncpg") {
@@ -660,7 +666,7 @@
     if (act === "rtdcopy") { rec.rtd.dut = rec.rtd.dut.map(a => a.map(() => a[0])); renderEntry(); toast("Đã chép lần 1 cho lần 2–5"); }
     if (act === "copy1") { rec.ps.set = rec.ps.set.map(() => rec.ps.set[0]); rec.ps.reset = rec.ps.reset.map(() => rec.ps.reset[0]); renderEntry(); toast("Đã chép lần 1 cho cả 5 lần"); }
     if (act === "save") saveRecord();
-    if (act === "new") { const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree }; const sig = rec.sig; const t = rec.type; rec = newRecord(t); Object.assign(rec.h, keep); rec.sig = sig; rec.certNo = autoCertNo(); renderEntry(); persistCurrent(); window.scrollTo(0, 0); }
+    if (act === "new") { const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree }; const sig = rec.sig; const t = rec.type; rec = newRecord(t); Object.assign(rec.h, keep); rec.sig = { inspector: sig.inspector, controller: "" }; rec.certNo = autoCertNo(); renderEntry(); persistCurrent(); window.scrollTo(0, 0); }
     if (act === "preview") renderPreview("all");
     if (b.dataset.pdf) makePdf(b.dataset.pdf);
     if (act === "share") sharePdf();
@@ -668,6 +674,29 @@
     persistCurrent();
   }
 
+  /* ---------- duyệt hồ sơ (cấp 2 trở lên) ---------- */
+  function approvalHtml() {
+    const a = rec.approved;
+    const st = a ? `<span class="ok">Đã duyệt</span> bởi <b>${esc(a.by)}</b> lúc ${esc(new Date(a.at).toLocaleString("vi-VN", { hour12: false }))}`
+      : `<span class="bad">Chưa duyệt</span> – chứng chỉ in dấu BẢN NHÁP cho đến khi Người kiểm soát duyệt`;
+    const btn = A.can("approve") ? (a ? `<button class="btn" data-act="unapprove">Huỷ duyệt</button>` : `<button class="btn pri" data-act="approve">Duyệt hồ sơ</button>`) : "";
+    return `<div class="hint wide">${st}</div>${btn ? `<div class="btns">${btn}</div>` : ""}`;
+  }
+  function logAct(act) { (rec.log = rec.log || []).push({ at: new Date().toISOString(), by: A.me() ? A.me().name : "", act }); }
+  function approve(on) {
+    if (!A.can("approve")) return;
+    if (on) {
+      if (!rec.h.tag) { toast("Nhập Tag trước khi duyệt"); return; }
+      const c = compute(); if (!c.res) { toast(c.errors[0] || "Chưa đủ số liệu"); return; }
+      if (!rec.sig.inspector) { toast("Chưa có tên Kiểm định viên"); return; }
+      const m = A.me();
+      if (rec.sig.inspector.trim().toLowerCase() === m.name.toLowerCase()) toast("Lưu ý: người duyệt trùng Kiểm định viên");
+      rec.sig.controller = m.name; rec.approved = { by: m.name, role: m.role, at: new Date().toISOString() }; logAct("Duyệt");
+    } else { delete rec.approved; logAct("Huỷ duyệt"); }
+    saveRecord(); renderEntry();
+  }
+  // Mọi chỉnh sửa số liệu sau khi duyệt đều huỷ duyệt
+  function touched() { if (rec.approved) { delete rec.approved; logAct("Sửa sau duyệt – huỷ duyệt"); toast("Đã sửa: hồ sơ cần duyệt lại"); return true; } return false; }
   function rememberNames() {
     [rec.sig.inspector, rec.sig.controller].forEach(n => { n = (n || "").trim(); if (n && !names.includes(n)) names.unshift(n); });
     names = names.slice(0, 30); store.set("names", names);
@@ -688,7 +717,7 @@
     const s1 = standById(rec.h.stand1), s2 = standById(rec.h.stand2), s3 = standById(rec.h.stand3), T = rec.type;
     const used = T === "PT" || T === "TG" ? [s1, s2] : ["TT", "RTD"].includes(T) ? [s1, s2, s3] : [s1];
     const exp = settings.warnExpired ? used.filter(Boolean).filter(s => isExpired(s, rec.h.calDate)) : [];
-    return { c, info: { stand1: s1, stand2: ["PT", "TT", "RTD", "TG"].includes(T) ? s2 : null, stand3: s3, heat: T === "TS" ? s1 : null, loc: recLoc(), draft: exp.length ? "CHUẨN HẾT HẠN, CẦN CẬP NHẬT" : (c.warns.some(w => w.startsWith("Chưa nhập")) ? "CHƯA ĐỦ CHỮ KÝ" : "") } };
+    return { c, info: { stand1: s1, stand2: ["PT", "TT", "RTD", "TG"].includes(T) ? s2 : null, stand3: s3, heat: T === "TS" ? s1 : null, loc: recLoc(), draft: exp.length ? "CHUẨN HẾT HẠN, CẦN CẬP NHẬT" : (c.warns.some(w => w.startsWith("Chưa nhập")) ? "CHƯA ĐỦ CHỮ KÝ" : (rec.approved ? "" : "CHƯA DUYỆT")) } };
   }
   function pagesHtml(which) {
     const { c, info } = docInfo();
@@ -769,9 +798,9 @@
       <input id="rq" placeholder="Tìm tag, số chứng chỉ, model…" value="${esc(q)}">
       <div class="btns"><button class="btn pri" data-r="qcPT">Bảng kiểm tra PT (QC)</button><button class="btn pri" data-r="qcPS">Bảng kiểm tra PS (QC)</button></div><div id="qcout"></div>
       <div class="btns"><button class="btn" data-r="csv">Xuất danh mục CSV</button><button class="btn" data-r="backup">Sao lưu JSON</button><label class="btn">Nhập JSON<input type="file" id="imp" accept=".json,application/json" hidden></label></div>
-      ${list.length ? list.map(r => `<div class="rec"><div><b>${esc(r.h.tag)}</b> <span class="tag">${r.type}</span> ${r.summary ? `<span class="${r.summary.pass ? "ok" : "bad"}">${r.summary.pass ? "Pass" : "Fail"}</span>` : ""}<br>
+      ${list.length ? list.map(r => `<div class="rec"><div><b>${esc(r.h.tag)}</b> <span class="tag">${r.type}</span> ${r.summary ? `<span class="${r.summary.pass ? "ok" : "bad"}">${r.summary.pass ? "Pass" : "Fail"}</span>` : ""} <span class="${r.approved ? "ok" : "mut"}">${r.approved ? "Đã duyệt" : "Chưa duyệt"}</span><br>
         <small class="mut">${esc(r.certNo)} · ${esc(r.h.calDate)} · ${esc(r.h.locMode === "free" ? r.h.locFree : r.h.location)} · U=${esc(r.summary ? r.summary.U : "—")}</small></div>
-        <div class="ra"><button class="btn sm" data-r="open" data-id="${r.id}">Mở</button><button class="btn sm" data-r="dup" data-id="${r.id}">Nhân bản</button><button class="btn sm" data-r="del" data-id="${r.id}">Xoá</button></div></div>`).join("") : `<p class="mut">Chưa có hồ sơ.</p>`}</div>`;
+        <div class="ra"><button class="btn sm" data-r="open" data-id="${r.id}">Mở</button><button class="btn sm" data-r="dup" data-id="${r.id}">Nhân bản</button>${A.can("deleteRecord") ? `<button class="btn sm" data-r="del" data-id="${r.id}">Xoá</button>` : ""}</div></div>`).join("") : `<p class="mut">Chưa có hồ sơ.</p>`}</div>`;
     const imp = $("#imp"); if (imp) imp.onchange = importJson;
     const rq = $("#rq"); rq.oninput = () => { const pos = rq.selectionStart; renderRecords(); const n = $("#rq"); n.focus(); n.setSelectionRange(pos, pos); };
   }
@@ -784,9 +813,10 @@
       const b = newRecord(r.type);
       rec.pt = { points: r.pt.points.slice(), rise: ["", "", "", "", ""], fall: ["", "", "", "", ""] }; rec.ps = b.ps; rec.ts = b.ts;
       rec.pg = Object.assign(b.pg, { std: (r.pg || b.pg).std.slice() }); rec.tt = Object.assign(b.tt, { nom: (r.tt || b.tt).nom.slice() }); rec.tg = Object.assign(b.tg, { nom: (r.tg || b.tg).nom.slice() }); rec.rtd = Object.assign(b.rtd, { std: (r.rtd || b.rtd).std.slice() });
+      delete rec.approved; delete rec.log; rec.sig = { inspector: A.me().name, controller: "" };
       rec.certNo = autoCertNo(); rec.certAuto = true; persistCurrent(); go("entry"); toast("Đã nhân bản – nhập tag và số đọc mới");
     }
-    if (b.dataset.r === "del" && r) {
+    if (b.dataset.r === "del" && r && A.can("deleteRecord")) {
       if (b.dataset.armed) { records = records.filter(x => x.id !== r.id); store.set("records", records); renderRecords(); toast("Đã xoá"); }
       else { b.dataset.armed = 1; b.textContent = "Xoá thật?"; b.classList.add("danger"); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Xoá"; b.classList.remove("danger"); } }, 3000); }
     }
@@ -830,12 +860,12 @@
     const today = todayISO();
     const row = s => `<div class="rec"><div><b>${esc(s.key)}</b> <span class="tag">${KINDS[s.kind] || s.kind}</span>${s.loc ? ` <span class="tag loc">${esc(s.loc)}</span>` : ""} <span class="${s.due && s.due >= today ? "ok" : "bad"}">${s.due && s.due >= today ? "Còn hạn " + s.due : "Hết hạn " + (s.due || "?")}</span><br>
       <small class="mut">${esc(s.name)} · ${esc(s.maker)} ${esc(s.model)} · S/N ${esc(s.serial)} · (${s.min}÷${s.max}) ${esc(s.unit)} · U = ${s.unc} ${esc(s.uncUnit)}${s.rdg ? (s.kind === "p" ? ` + ${s.rdg}%Rdg` : ` · sai số ${s.rdg} ${esc(s.unit)}`) : ""}${s.err && s.kind === "r" ? ` · sai số ${s.err} Ω` : ""}${s.cert ? ` · GCN ${esc(s.cert)}` : ""} · ${esc(s.trace || "")}</small>${dispTxt(s) ? `<br><small class="mut">Hiển thị (số chữ số thập phân): ${esc(dispTxt(s))}</small>` : ""}${s.note ? `<br><small class="${/CHỈ DÙNG|nghi|cần chốt/.test(s.note) ? "bad" : "mut"}">${esc(s.note)}</small>` : ""}</div>
-      <div class="ra"><button class="btn sm" data-s="edit" data-id="${s.id}">Sửa</button></div></div>`;
+      ${A.can("editStands") ? `<div class="ra"><button class="btn sm" data-s="edit" data-id="${s.id}">Sửa</button></div>` : ""}</div>`;
     const form = editStand ? standForm(editStand) : "";
     $("#v-stands").innerHTML = `${form}<div class="card"><h2>Thư viện chuẩn</h2>
       <p class="hint">Cập nhật 30/10/2026 theo các giấy chứng nhận hiệu chuẩn mới (VMI, Unitek): U là giá trị lớn nhất trên GCN, kèm số GCN và ghi chú chỗ thay đổi. Nhãn "Cà Mau" = chuẩn có trong file Excel của Cà Mau (1.TT_LFS_CM_26, RTD_DK_CM_2026); sửa ô "Nơi đặt" nếu chuẩn đã chuyển chỗ. Khi có GCN mới, sửa U và hạn hiệu chuẩn tại đây.</p>
       <div class="btns">${["", "p", "e", "t", "r"].map(k => `<button class="btn sm${standKind === k ? " pri" : ""}" data-s="kind" data-k="${k}">${k ? KINDS[k] : "Tất cả"}</button>`).join("")}</div>
-      <div class="btns"><button class="btn pri" data-s="add">Thêm chuẩn</button><button class="btn" data-s="reset">Khôi phục danh sách gốc</button></div>
+      ${A.can("editStands") ? `<div class="btns"><button class="btn pri" data-s="add">Thêm chuẩn</button><button class="btn" data-s="reset">Khôi phục danh sách gốc</button></div>` : `<p class="hint">Chỉ Trưởng phòng / Quản trị (cấp 3) được sửa thư viện chuẩn.</p>`}
       ${stands.filter(s => !standKind || s.kind === standKind).map(row).join("")}</div>`;
   }
   function dispTxt(s) {
@@ -857,6 +887,7 @@
   function onStandsClick(e) {
     const b = e.target.closest("button[data-s]"); if (!b) return;
     const a = b.dataset.s;
+    if (a !== "kind" && !A.can("editStands")) return;
     if (a === "edit") { editStand = clone(standById(b.dataset.id)); renderStands(); window.scrollTo(0, 0); }
     if (a === "add") { editStand = { _new: true, id: "s" + Date.now().toString(36), kind: "p", key: "", name: "", model: "", serial: "", maker: "", min: 0, max: 0, unit: "bar", unc: 0, uncUnit: "bar", rdg: 0, trace: "Viện ĐLVN (VMI)", due: "", cert: "", loc: "", note: "" }; renderStands(); }
     if (a === "cancel") { editStand = null; renderStands(); }
@@ -876,7 +907,11 @@
   function renderSettings() {
     const f = (lab, p, wide) => `<label class="f${wide ? " wide" : ""}"><span>${lab}</span><input data-sp="${p}" value="${esc(getPath(settings, p))}"></label>`;
     const sel = (lab, p, opts) => `<label class="f"><span>${lab}</span><select data-sp="${p}">${opts.map(([v, t]) => `<option value="${v}"${!!getPath(settings, p) === !!v ? " selected" : ""}>${t}</option>`).join("")}</select></label>`;
-    $("#v-settings").innerHTML = `<div class="card"><h2>Người ký trang 1 chứng chỉ</h2><div class="grid">
+    const tail = `<div class="card"><h2>Tự kiểm tra công thức</h2><p class="hint">Chạy lại 2 ca thật từ file DGCP 10/2026 (PT-1506A, PSHH-0522) và so sánh từng số.</p>
+        <div class="btns"><button class="btn pri" data-t="selftest">Chạy kiểm tra</button></div><div id="stout"></div></div>
+      <div class="card"><h2>Về ứng dụng</h2><p class="hint">LAB PVGAS Services · bản thử nghiệm PT, PS, PG, TS, TT, RTD, TG · chạy offline, dữ liệu chỉ lưu trên máy này (dùng Sao lưu JSON ở tab Hồ sơ).</p></div>`;
+    if (!A.can("settings")) { $("#v-settings").innerHTML = A.accountCard() + `<div class="card"><p class="hint">Cài đặt chứng chỉ chỉ dành cho Trưởng phòng / Quản trị (cấp 3).</p></div>` + tail; return; }
+    $("#v-settings").innerHTML = A.accountCard() + `<div class="card"><h2>Người ký trang 1 chứng chỉ</h2><div class="grid">
         ${f("Chức danh trái", "sig1Title")}${f("Tên", "sig1Name")}${f("Chức danh trái (EN)", "sig1TitleEn", 1)}
         ${f("Chức danh phải", "sig2Title")}${f("Tên", "sig2Name")}${f("Chức danh phải (EN)", "sig2TitleEn", 1)}
         ${f("Nơi cấp (dòng ngày)", "place")}${f("Chu kỳ HC (tháng)", "dueMonths")}
@@ -896,20 +931,19 @@
         ${f("PS – Môi trường (chứng chỉ)", "PS.env", 1)}${f("PS – Nhiệt độ QTG", "PS.qtgTemp")}${f("PS – Độ ẩm QTG", "PS.qtgHum")}
         ${NEWT.map(t => `${f(`${t} – Phương pháp`, `${t}.procedure`)}${f(`${t} – Mã biểu mẫu QTG`, `${t}.qtgForm`)}${t === "PG" ? f("PG – Ký hiệu series (N256.yy<b>A</b>)", "PG.series") : f(`${t} – Mã bảng Uncer`, `${t}.form`)}${f(`${t} – Tiền tố CC`, `${t}.prefix`)}${f(`${t} – Tiền tố BB`, `${t}.bbPrefix`)}
           ${t === "PG" ? f("PG – Phương pháp in GCN (VN)", "PG.procVN", 1) + f("PG – Phương pháp in GCN (EN)", "PG.procEN", 1) : f(`${t} – Môi trường (chứng chỉ)`, `${t}.env`, 1)}${f(`${t} – Nhiệt độ QTG`, `${t}.qtgTemp`)}${f(`${t} – Độ ẩm QTG`, `${t}.qtgHum`)}`).join("")}</div>
-        <div class="btns"><button class="btn" data-t="resetset">Về mặc định</button></div></div>
-      <div class="card"><h2>Tự kiểm tra công thức</h2><p class="hint">Chạy lại 2 ca thật từ file DGCP 10/2026 (PT-1506A, PSHH-0522) và so sánh từng số.</p>
-        <div class="btns"><button class="btn pri" data-t="selftest">Chạy kiểm tra</button></div><div id="stout"></div></div>
-      <div class="card"><h2>Về ứng dụng</h2><p class="hint">LAB PVGAS Services · bản thử nghiệm PT, PS, PG, TS, TT, RTD · chạy offline, dữ liệu chỉ lưu trên máy này (dùng Sao lưu JSON ở tab Hồ sơ).</p></div>`;
+        <div class="btns"><button class="btn" data-t="resetset">Về mặc định</button></div></div>` + tail;
   }
   function onSettingsInput(e) {
-    const p = e.target.dataset.sp; if (!p) return;
+    if (e.type === "change" && A.onAccountChange(e, renderSettings, toast)) return;
+    const p = e.target.dataset.sp; if (!p || !A.can("settings")) return;
     let v = e.target.value; if (["showLogo", "warnExpired", "issueDayBlank", "showAccred"].includes(p)) v = !!v; if (p === "dueMonths") v = num(v) || 12;
     const ks = p.split("."); const last = ks.pop(); const t = ks.reduce((a, k) => a[k], settings); t[last] = v;
     store.set("settings", settings);
   }
   function onSettingsClick(e) {
+    if (e.target.closest("button[data-u]")) { A.onAccountClick(e, renderSettings, toast); return; }
     const b = e.target.closest("button[data-t]"); if (!b) return;
-    if (b.dataset.t === "resetset") { settings = clone(SEED.settings); store.set("settings", settings); renderSettings(); toast("Đã về mặc định"); }
+    if (b.dataset.t === "resetset" && A.can("settings")) { settings = clone(SEED.settings); store.set("settings", settings); renderSettings(); toast("Đã về mặc định"); }
     if (b.dataset.t === "selftest") $("#stout").innerHTML = selfTest();
   }
   function selfTest() {
@@ -954,7 +988,7 @@
     $("#v-settings").addEventListener("input", onSettingsInput);
     $("#v-settings").addEventListener("change", onSettingsInput);
     $("#v-settings").addEventListener("click", onSettingsClick);
-    go("entry");
+    A.start(m => { if (!rec.saved && !rec.sig.inspector) rec.sig.inspector = m.name; go("entry"); });   // nothing renders before PIN login
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => { });
   });
 })();
