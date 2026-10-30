@@ -1,7 +1,7 @@
 /* LAB PVGAS Services – UI */
 (function () {
   "use strict";
-  const A = window.LabAuth, C = window.LabCalc, C2 = window.LabCalc2, D = window.LabDocs, D2 = window.LabDocs2, SEED = window.LabSeed, esc = D.esc;
+  const A = window.LabAuth, P = window.LabPhotos, C = window.LabCalc, C2 = window.LabCalc2, D = window.LabDocs, D2 = window.LabDocs2, SEED = window.LabSeed, esc = D.esc;
   const NEWT = ["PG", "TS", "TT", "RTD", "TG"], READY = ["PT", "PS"].concat(NEWT), TEMP = ["TS", "TT", "RTD", "TG"];
   const DESC0 = { PT: "Pressure Transmitter", PS: "Pressure Switch", PG: "Pressure Gauge", TS: "Temperature Switch", TT: "Temperature Transmitter", RTD: "Industrial Platinum Resistance Thermometer", TG: "Temperature Indicator" };
   const blank = n => Array(n).fill("");
@@ -52,8 +52,10 @@
     return st;
   }
   // Hồ sơ cũ: PS lưu P.High/P.Low -> đổi sang Set/Reset như QTG 2026
+  const blankPhotos = () => Array.from({ length: P.SLOTS }, (_, i) => ({ cap: `Điểm ${i + 1}`, has: false }));
   function normalize(r) {
     if (!r) return r;
+    if (!Array.isArray(r.photos)) r.photos = blankPhotos();
     r.h = r.h || {};
     if (r.h.envOk === undefined || r.h.envOk === true) r.h.envOk = "1";
     if (r.h.mfgYear === undefined) r.h.mfgYear = "";
@@ -96,7 +98,8 @@
       tt: { nom: blank(5), sr: [0, 1, 2, 3, 4].map(() => blank(3)), sf: [0, 1, 2, 3, 4].map(() => blank(3)), dr: [0, 1, 2, 3, 4].map(() => blank(3)), df: [0, 1, 2, 3, 4].map(() => blank(3)) },
       rtd: { std: blank(6), dut: [0, 1, 2, 3, 4, 5].map(() => blank(5)) },
       tg: { nom: blank(5), sr: [0, 1, 2, 3, 4].map(() => blank(3)), sf: [0, 1, 2, 3, 4].map(() => blank(3)), dr: [0, 1, 2, 3, 4].map(() => blank(3)), df: [0, 1, 2, 3, 4].map(() => blank(3)) },
-      sig: { inspector: A.me() ? A.me().name : "", controller: "" }, saved: false
+      sig: { inspector: A.me() ? A.me().name : "", controller: "" }, saved: false,
+      owner: A.me() ? { id: A.me().id, name: A.me().name } : null, photos: blankPhotos()
     };
   }
 
@@ -414,7 +417,7 @@
     let ptsTitle = PT ? "lên / xuống" : "5 lần";
     if (NEWT.includes(rec.type)) ({ dev, std, pts, ptsTitle } = buildNew(locHtml));
     const sig = `<div class="grid">
-        ${fld("Người thực hiện (Kiểm định viên)", "sig.inspector", { list: "names" })}
+        ${fld("Người thực hiện (Kiểm định viên)", "sig.inspector", { list: "names", ro: !A.can("users") })}
         ${fld("Người soát lại / kiểm tra (Người kiểm soát)", "sig.controller", { list: "names", ro: true, ph: "Điền khi duyệt" })}
         ${fld("Ngày cấp chứng chỉ", "h.issueDate", { type: "date" })}
         ${fld("Ghi chú QTG", "h.note", { wide: 1 })}
@@ -425,9 +428,10 @@
       <div class="card"><h2><i>2</i> Thông tin thiết bị <small>(phần ghi tay trên QTG)</small></h2>${dev}</div>
       <div class="card"><h2><i>3</i> Chuẩn sử dụng</h2>${std}</div>
       <div class="card"><h2><i>4</i> Số liệu đo ${ptsTitle}</h2>${pts}</div>
+      ${photoCard()}
       <div class="card"><h2><i>5</i> Kết quả & ĐKĐBĐ</h2><div id="result"></div></div>
       <div class="card"><h2><i>6</i> Ký tên & xuất hồ sơ</h2>${sig}
-        ${approvalHtml()}
+        ${ownerHtml()}${approvalHtml()}
         <div class="btns"><button class="btn pri" data-act="save">Lưu hồ sơ</button><button class="btn" data-act="new">Hồ sơ mới</button></div>
         <div class="btns"><button class="btn pri" data-pdf="cert">Chứng chỉ (2 trang)</button><button class="btn" data-pdf="qtg">Biên bản QTG</button><button class="btn" data-pdf="unc">Bảng Uncer (QC)</button><button class="btn" data-pdf="all">Trọn bộ PDF</button></div>
         <div class="btns"><button class="btn" data-act="preview">Xem trước trọn bộ</button></div>
@@ -436,6 +440,42 @@
     if (!rec.certNo) rec.certNo = autoCertNo();
     $("#f_certNo").value = rec.certNo;
     renderResult();   // syncCertNo blanks the number when the result fails
+    loadThumbs();
+  }
+  /* ---------- người chịu trách nhiệm & ảnh bằng chứng ---------- */
+  // Người tạo hồ sơ (tài khoản đăng nhập lúc tạo) chịu trách nhiệm số liệu; cấp 2 trở lên được sửa hồ sơ của người khác
+  const canEdit = () => !rec.owner || !A.me() || rec.owner.id === A.me().id || A.can("approve");
+  function ownerHtml() {
+    const o = rec.owner ? `<b>${esc(rec.owner.name)}</b>` : `<span class="mut">chưa ghi (hồ sơ tạo trước khi có đăng nhập)</span>`;
+    return `<div class="hint wide">Người nhập liệu, chịu trách nhiệm hồ sơ: ${o}${canEdit() ? "" : ` · <span class="bad">bạn chỉ được xem, không sửa</span>`}</div>`;
+  }
+  function photoCard() {
+    const ed = canEdit();
+    const cells = rec.photos.map((ph, i) => `<div class="ph"><div class="phimg" id="phimg${i}">${ph.has ? "" : `<span>Ô ${i + 1}</span>`}</div>
+      <input data-p="photos.${i}.cap" value="${esc(ph.cap)}" placeholder="Chú thích"${ed ? "" : " readonly"}>
+      ${ph.has ? `<small class="mut">${esc(ph.by || "")}${ph.at ? " · " + esc(new Date(ph.at).toLocaleString("vi-VN", { hour12: false })) : ""}</small>` : ""}
+      ${ed ? `<div class="btns"><label class="btn sm">${ph.has ? "Thay" : "+ Ảnh"}<input type="file" accept="image/*" capture="environment" data-photo="${i}" hidden></label>${ph.has ? `<button class="btn sm" data-phdel="${i}">Xoá</button>` : ""}</div>` : ""}</div>`).join("");
+    const n = rec.photos.filter(x => x.has).length;
+    return `<div class="card"><h2><i>📷</i> Ảnh bằng chứng <small>(${n}/${P.SLOTS}, không bắt buộc)</small></h2>
+      <p class="hint">Chụp màn hình chuẩn / thiết bị tại từng điểm đo làm bằng chứng. Ảnh lưu trên máy này, đi kèm khi Sao lưu JSON. Thay hoặc xoá ảnh sau khi duyệt thì hồ sơ phải duyệt lại.</p>
+      <div class="phgrid">${cells}</div></div>`;
+  }
+  async function loadThumbs() {
+    const id = rec.id;
+    for (let i = 0; i < rec.photos.length; i++) {
+      if (!rec.photos[i].has) continue;
+      let d = null; try { d = await P.get(`${id}:${i}`); } catch (e) { }
+      const el = $(`#phimg${i}`); if (!el || rec.id !== id) return;
+      el.innerHTML = d ? `<img src="${d}" alt="Ảnh ${i + 1}" data-phview="${i}">` : `<span class="bad">mất ảnh</span>`;
+    }
+  }
+  async function onPhotoChange(e) {
+    const i = Number(e.target.dataset.photo), f = e.target.files[0]; if (!f || !canEdit()) return;
+    try {
+      const d = await P.resize(f); await P.put(`${rec.id}:${i}`, d);
+      const m = A.me(); Object.assign(rec.photos[i], { has: true, by: m ? m.name : "", at: new Date().toISOString() });
+      touched(); logAct(`Ảnh ô ${i + 1}`); if (rec.saved) saveRecord(true); renderEntry(); persistCurrent();
+    } catch (x) { toast(x.message || "Không lưu được ảnh"); }
   }
 
   // Entry blocks for PG / TS / TT / RTD (fields follow the 2026 QTG forms)
@@ -589,6 +629,7 @@
   function onInput(e) {
     const p = e.target.dataset.p; if (!p) return;
     if (e.target.readOnly) return;
+    if (!canEdit()) { toast(`Hồ sơ của ${rec.owner.name}: cấp 1 chỉ sửa hồ sơ mình tạo`); renderEntry(); return; }
     setPath(rec, p, e.target.value);
     const wasApproved = touched();
     if (p === "certNo") rec.certAuto = false;
@@ -638,11 +679,18 @@
     if (b.dataset.type) {
       if (b.dataset.type === rec.type) return;
       const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree, calDate: rec.h.calDate, issueDate: rec.h.issueDate };
-      const sig = rec.sig; rec = newRecord(b.dataset.type); Object.assign(rec.h, keep); rec.sig = { inspector: sig.inspector, controller: "" }; rec.certNo = autoCertNo();
+      rec = newRecord(b.dataset.type); Object.assign(rec.h, keep); rec.certNo = autoCertNo();
       renderEntry(); persistCurrent(); return;
     }
     const act = b.dataset.act;
     if (act === "approve" || act === "unapprove") { approve(act === "approve"); return; }
+    if (b.dataset.phdel) {
+      if (!canEdit()) return; const i = Number(b.dataset.phdel);
+      if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Xoá thật?"; b.classList.add("danger"); return; }
+      P.del(`${rec.id}:${i}`).catch(() => { }); rec.photos[i] = { cap: rec.photos[i].cap, has: false };
+      touched(); logAct(`Xoá ảnh ô ${i + 1}`); if (rec.saved) saveRecord(true); renderEntry(); persistCurrent(); return;
+    }
+    if (act && !["new", "preview", "share", "download"].includes(act) && !canEdit()) { toast(`Hồ sơ của ${rec.owner.name}: cấp 1 chỉ sửa hồ sơ mình tạo`); return; }
     if (act && !["save", "new", "preview", "share", "download"].includes(act)) touched();
     if (act === "pts") { genPoints(); rec.ptAuto = true; renderEntry(); }
     if (act === "sync") syncRF();
@@ -666,7 +714,7 @@
     if (act === "rtdcopy") { rec.rtd.dut = rec.rtd.dut.map(a => a.map(() => a[0])); renderEntry(); toast("Đã chép lần 1 cho lần 2–5"); }
     if (act === "copy1") { rec.ps.set = rec.ps.set.map(() => rec.ps.set[0]); rec.ps.reset = rec.ps.reset.map(() => rec.ps.reset[0]); renderEntry(); toast("Đã chép lần 1 cho cả 5 lần"); }
     if (act === "save") saveRecord();
-    if (act === "new") { const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree }; const sig = rec.sig; const t = rec.type; rec = newRecord(t); Object.assign(rec.h, keep); rec.sig = { inspector: sig.inspector, controller: "" }; rec.certNo = autoCertNo(); renderEntry(); persistCurrent(); window.scrollTo(0, 0); }
+    if (act === "new") { const keep = { location: rec.h.location, locMode: rec.h.locMode, locFree: rec.h.locFree, custFree: rec.h.custFree }; const t = rec.type; rec = newRecord(t); Object.assign(rec.h, keep); rec.certNo = autoCertNo(); renderEntry(); persistCurrent(); window.scrollTo(0, 0); }
     if (act === "preview") renderPreview("all");
     if (b.dataset.pdf) makePdf(b.dataset.pdf);
     if (act === "share") sharePdf();
@@ -701,14 +749,17 @@
     [rec.sig.inspector, rec.sig.controller].forEach(n => { n = (n || "").trim(); if (n && !names.includes(n)) names.unshift(n); });
     names = names.slice(0, 30); store.set("names", names);
   }
-  function saveRecord() {
-    if (!rec.h.tag) { toast("Nhập Tag trước khi lưu"); return; }
+  function saveRecord(quiet) {
+    if (!rec.h.tag) { if (!quiet) toast("Nhập Tag trước khi lưu"); return; }
+    if (!canEdit()) { toast(`Hồ sơ của ${rec.owner.name}: cấp 1 chỉ sửa hồ sơ mình tạo`); return; }
+    if (!rec.owner && A.me()) rec.owner = { id: A.me().id, name: A.me().name };
+    if (quiet !== true) logAct(rec.saved ? "Lưu" : "Tạo");
     const c = compute(); syncCertNo(c);
     rec.saved = true; rec.updated = new Date().toISOString();
     rec.summary = c.res ? { pass: c.res.pass, U: summaryU(rec.type, c.res) } : null;
     const i = records.findIndex(r => r.id === rec.id);
     if (i >= 0) records[i] = clone(rec); else records.unshift(clone(rec));
-    store.set("records", records); rememberNames(); toast("Đã lưu " + rec.certNo);
+    store.set("records", records); rememberNames(); if (quiet !== true) toast("Đã lưu " + rec.certNo);
   }
 
   /* ---------- documents ---------- */
@@ -791,15 +842,18 @@
   }
 
   /* ---------- records tab ---------- */
+  let mineOnly = false;
   function renderRecords() {
     const q = ($("#rq") && $("#rq").value || "").toLowerCase();
-    const list = records.filter(r => !q || [r.h.tag, r.certNo, r.h.model, r.h.location, r.h.locFree].join(" ").toLowerCase().includes(q));
+    const m = A.me();
+    const list = records.filter(r => (!mineOnly || (m && r.owner && r.owner.id === m.id)) && (!q || [r.h.tag, r.certNo, r.h.model, r.h.location, r.h.locFree, r.owner ? r.owner.name : ""].join(" ").toLowerCase().includes(q)));
     $("#v-records").innerHTML = `<div class="card"><h2>Hồ sơ đã lưu <small>(${records.length})</small></h2>
-      <input id="rq" placeholder="Tìm tag, số chứng chỉ, model…" value="${esc(q)}">
+      <input id="rq" placeholder="Tìm tag, số chứng chỉ, model, người nhập…" value="${esc(q)}">
+      <div class="btns"><button class="btn sm${mineOnly ? "" : " pri"}" data-r="all">Tất cả</button><button class="btn sm${mineOnly ? " pri" : ""}" data-r="mine">Hồ sơ của tôi</button></div>
       <div class="btns"><button class="btn pri" data-r="qcPT">Bảng kiểm tra PT (QC)</button><button class="btn pri" data-r="qcPS">Bảng kiểm tra PS (QC)</button></div><div id="qcout"></div>
       <div class="btns"><button class="btn" data-r="csv">Xuất danh mục CSV</button><button class="btn" data-r="backup">Sao lưu JSON</button><label class="btn">Nhập JSON<input type="file" id="imp" accept=".json,application/json" hidden></label></div>
       ${list.length ? list.map(r => `<div class="rec"><div><b>${esc(r.h.tag)}</b> <span class="tag">${r.type}</span> ${r.summary ? `<span class="${r.summary.pass ? "ok" : "bad"}">${r.summary.pass ? "Pass" : "Fail"}</span>` : ""} <span class="${r.approved ? "ok" : "mut"}">${r.approved ? "Đã duyệt" : "Chưa duyệt"}</span><br>
-        <small class="mut">${esc(r.certNo)} · ${esc(r.h.calDate)} · ${esc(r.h.locMode === "free" ? r.h.locFree : r.h.location)} · U=${esc(r.summary ? r.summary.U : "—")}</small></div>
+        <small class="mut">${esc(r.certNo)} · ${esc(r.h.calDate)} · ${esc(r.h.locMode === "free" ? r.h.locFree : r.h.location)} · U=${esc(r.summary ? r.summary.U : "—")} · Người nhập: ${esc(r.owner ? r.owner.name : "—")}${(r.photos || []).some(x => x.has) ? ` · 📷 ${(r.photos || []).filter(x => x.has).length}` : ""}</small></div>
         <div class="ra"><button class="btn sm" data-r="open" data-id="${r.id}">Mở</button><button class="btn sm" data-r="dup" data-id="${r.id}">Nhân bản</button>${A.can("deleteRecord") ? `<button class="btn sm" data-r="del" data-id="${r.id}">Xoá</button>` : ""}</div></div>`).join("") : `<p class="mut">Chưa có hồ sơ.</p>`}</div>`;
     const imp = $("#imp"); if (imp) imp.onchange = importJson;
     const rq = $("#rq"); rq.oninput = () => { const pos = rq.selectionStart; renderRecords(); const n = $("#rq"); n.focus(); n.setSelectionRange(pos, pos); };
@@ -807,17 +861,19 @@
   function onRecordsClick(e) {
     const b = e.target.closest("button[data-r]"); if (!b) return;
     const r = records.find(x => x.id === b.dataset.id);
-    if (b.dataset.r === "open" && r) { rec = clone(r); persistCurrent(); go("entry"); }
+    if (b.dataset.r === "all" || b.dataset.r === "mine") { mineOnly = b.dataset.r === "mine"; renderRecords(); return; }
+    if (b.dataset.r === "open" && r) { rec = normalize(clone(r)); persistCurrent(); go("entry"); }
     if (b.dataset.r === "dup" && r) {
       rec = clone(r); rec.id = "r" + Date.now().toString(36); rec.saved = false; rec.summary = null; rec.h.tag = ""; rec.h.serial = "";
       const b = newRecord(r.type);
       rec.pt = { points: r.pt.points.slice(), rise: ["", "", "", "", ""], fall: ["", "", "", "", ""] }; rec.ps = b.ps; rec.ts = b.ts;
       rec.pg = Object.assign(b.pg, { std: (r.pg || b.pg).std.slice() }); rec.tt = Object.assign(b.tt, { nom: (r.tt || b.tt).nom.slice() }); rec.tg = Object.assign(b.tg, { nom: (r.tg || b.tg).nom.slice() }); rec.rtd = Object.assign(b.rtd, { std: (r.rtd || b.rtd).std.slice() });
       delete rec.approved; delete rec.log; rec.sig = { inspector: A.me().name, controller: "" };
+      rec.owner = { id: A.me().id, name: A.me().name }; rec.photos = blankPhotos();
       rec.certNo = autoCertNo(); rec.certAuto = true; persistCurrent(); go("entry"); toast("Đã nhân bản – nhập tag và số đọc mới");
     }
     if (b.dataset.r === "del" && r && A.can("deleteRecord")) {
-      if (b.dataset.armed) { records = records.filter(x => x.id !== r.id); store.set("records", records); renderRecords(); toast("Đã xoá"); }
+      if (b.dataset.armed) { P.delRecord(r.id).catch(() => { }); records = records.filter(x => x.id !== r.id); store.set("records", records); renderRecords(); toast("Đã xoá"); }
       else { b.dataset.armed = 1; b.textContent = "Xoá thật?"; b.classList.add("danger"); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Xoá"; b.classList.remove("danger"); } }, 3000); }
     }
     if (b.dataset.r === "qcPT" || b.dataset.r === "qcPS") {
@@ -831,10 +887,15 @@
     }
     if (b.dataset.r === "share") { sharePdf(); return; }
     if (b.dataset.r === "download") { downloadPdf(); return; }
-    if (b.dataset.r === "backup") saveFile(new Blob([JSON.stringify({ app: "lab-pvgas-services", records, stands, settings }, null, 1)], { type: "application/json" }), `LAB_PVGAS_backup_${todayISO()}.json`);
+    if (b.dataset.r === "backup") {
+      P.all().catch(() => ({})).then(all => {
+        const photos = {}; Object.keys(all).forEach(k => { if (records.some(r => k.startsWith(r.id + ":"))) photos[k] = all[k]; });
+        saveFile(new Blob([JSON.stringify({ app: "lab-pvgas-services", records, stands, settings, photos }, null, 1)], { type: "application/json" }), `LAB_PVGAS_backup_${todayISO()}.json`);
+      });
+    }
     if (b.dataset.r === "csv") {
-      const head = ["Số chứng chỉ", "Loại", "Location", "Tag", "Mô tả", "Hãng", "Model", "Serial", "Min", "Max", "Đơn vị", "Pset", "Đơn vị Pset", "Độ chính xác", "Ngày HC", "U", "Kết quả", "Kiểm định viên", "Người kiểm soát"];
-      const rows = records.map(r => [r.certNo, r.type, r.h.locMode === "free" ? r.h.locFree : r.h.location, r.h.tag, r.h.description, r.h.maker, r.h.model, r.h.serial, r.h.min, r.h.max, r.h.unit, r.type === "PS" ? r.h.pset : r.type === "TS" ? r.h.tset : "", r.type === "PS" ? r.h.unitPset : r.type === "TS" ? "°C" : "", r.h.acc, r.h.calDate, r.summary ? r.summary.U : "", r.summary ? (r.summary.pass ? "Đạt (Pass)" : "Không đạt (Fail)") : "", r.sig.inspector, r.sig.controller]);
+      const head = ["Số chứng chỉ", "Loại", "Location", "Tag", "Mô tả", "Hãng", "Model", "Serial", "Min", "Max", "Đơn vị", "Pset", "Đơn vị Pset", "Độ chính xác", "Ngày HC", "U", "Kết quả", "Kiểm định viên", "Người kiểm soát", "Người nhập liệu", "Duyệt", "Số ảnh"];
+      const rows = records.map(r => [r.certNo, r.type, r.h.locMode === "free" ? r.h.locFree : r.h.location, r.h.tag, r.h.description, r.h.maker, r.h.model, r.h.serial, r.h.min, r.h.max, r.h.unit, r.type === "PS" ? r.h.pset : r.type === "TS" ? r.h.tset : "", r.type === "PS" ? r.h.unitPset : r.type === "TS" ? "°C" : "", r.h.acc, r.h.calDate, r.summary ? r.summary.U : "", r.summary ? (r.summary.pass ? "Đạt (Pass)" : "Không đạt (Fail)") : "", r.sig.inspector, r.sig.controller, r.owner ? r.owner.name : "", r.approved ? r.approved.by : "", (r.photos || []).filter(x => x.has).length]);
       const csv = "﻿" + [head].concat(rows).map(a => a.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
       saveFile(new Blob([csv], { type: "text/csv" }), `DanhMuc_${todayISO()}.csv`);
     }
@@ -848,7 +909,7 @@
     const f = e.target.files[0]; if (!f) return;
     f.text().then(t => {
       const d = JSON.parse(t); let n = 0;
-      (d.records || []).forEach(r => { if (!records.some(x => x.id === r.id)) { records.push(r); n++; } });
+      (d.records || []).forEach(r => { if (!records.some(x => x.id === r.id)) { records.push(normalize(r)); n++; Object.keys(d.photos || {}).forEach(k => { if (k.startsWith(r.id + ":")) P.put(k, d.photos[k]).catch(() => { }); }); } });
       store.set("records", records); renderRecords(); toast(`Đã nhập ${n} hồ sơ`);
     }).catch(() => toast("File không hợp lệ"));
   }
@@ -978,6 +1039,8 @@
     $("#v-entry").addEventListener("input", onInput);
     $("#v-entry").addEventListener("change", e => { if (e.target.tagName === "SELECT" || e.target.type === "date") onInput(e); });
     $("#v-entry").addEventListener("click", onClick);
+    $("#v-entry").addEventListener("change", e => { if (e.target.dataset.photo != null) onPhotoChange(e); });
+    $("#v-entry").addEventListener("click", e => { const im = e.target.closest("img[data-phview]"); if (im) { const w = window.open(); if (w) w.document.write(`<title>Ảnh</title><img src="${im.src}" style="max-width:100%">`); } });
     $("#v-records").addEventListener("click", onRecordsClick);
     $("#v-stands").addEventListener("click", onStandsClick);
     $("#v-stands").addEventListener("change", e => {
@@ -988,7 +1051,7 @@
     $("#v-settings").addEventListener("input", onSettingsInput);
     $("#v-settings").addEventListener("change", onSettingsInput);
     $("#v-settings").addEventListener("click", onSettingsClick);
-    A.start(m => { if (!rec.saved && !rec.sig.inspector) rec.sig.inspector = m.name; go("entry"); });   // nothing renders before PIN login
+    A.start(m => { if (!rec.saved) { rec.owner = { id: m.id, name: m.name }; rec.sig.inspector = m.name; } go("entry"); });   // an unsaved draft belongs to whoever is logged in   // nothing renders before PIN login
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => { });
   });
 })();
