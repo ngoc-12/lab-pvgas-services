@@ -1,11 +1,14 @@
 /* Seed data from the 2026 company workbooks PT_DGCP_10_2026.xls / PS_DGCP_10_2026.xls
- * (sheets "Stand Ref" -> Stand, "Location"). Only standards that are in date in the 2026 workbook are listed;
+ * (sheets "Stand Ref" -> Stand, "Location"); temperature / resistance standards (kind t, r) and the TT ammeter
+ * from 1.TT_LFS_CM_26.xls, RTD_DK_CM_2026_.xls and LFS_TS 09 2026.xls (sheet "Stand", in-date rows only). Only standards that are in date in the 2026 workbook are listed;
  * the expired entries of the PS workbook (DPI620/DPI605/Deadweight/700G08/MC6 EXT 250-1000/DPG100) are left out.
  * key = the name used in the workbook drop-down (Data112!N / Data133!N), so records can be traced back to the sheet.
  */
 window.LabSeed = {
-  version: 2,
-  // kind: "p" pressure standard (Stand1), "e" electrical standard (Stand2, PT only)
+  version: 3,
+  // kind: "p" pressure standard, "e" electrical (mA) standard, "t" temperature standard / heat source, "r" resistance meter
+  // t: stab / radial / axial = Stand!Stability/Radial/Axial of the heat source (°C); heat = name printed as "Thiết bị tạo nhiệt"
+  // e / r: err = column "Sai số" (mA or Ω) used by the TT / RTD sheets beside the uncertainty
   // rdg = column "Reading/Err" (% of reading for Stand1, error term for Stand2)
   stands: [
     {"id": "APM30 (322077 - 30 bar)", "kind": "p", "key": "APM30 (322077 - 30 bar)", "name": "Digital Pressure Gauge", "model": "ASC400/APM30", "serial": "322077", "maker": "Ametek", "min": 0, "max": 30, "unit": "bar", "res": "0.001", "accuracy": "0.0075 %FS", "unc": 0.002, "uncUnit": "bar", "rdg": 0.0, "trace": "Viện ĐLVN (VMI)", "due": "2026-12-31"},
@@ -23,7 +26,13 @@ window.LabSeed = {
     {"id": "700G02", "kind": "p", "key": "700G02", "name": "Digital Pressure Gauge", "model": "700G02", "serial": "6507514", "maker": "Fluke", "min": 0, "max": 70, "unit": "mbar", "res": "0.001", "accuracy": "±0.05 %FS", "unc": 0.007, "uncUnit": "mbar", "rdg": 0.05, "trace": "Viện ĐLVN (VMI)", "due": "2026-12-31"},
     {"id": "754 (ĐCM)", "kind": "e", "key": "754 (ĐCM)", "name": "Documenting Process Cal.", "model": "754", "serial": "3857051", "maker": "Fluke", "min": 0, "max": 30, "unit": "mA", "res": "0.001mA", "accuracy": "±(0.01% Rdg + 5 μA)", "unc": 0.02, "uncUnit": "%", "rdg": 0.0, "trace": "Quatest 3", "due": "2026-12-31", "certRange": 30},
     {"id": "754 (6801009)", "kind": "e", "key": "754 (6801009)", "name": "Documenting Process Cal.", "model": "754", "serial": "6801009", "maker": "Fluke", "min": 0, "max": 30, "unit": "mA", "res": "0.001mA", "accuracy": "±(0.01% Rdg + 5 μA)", "unc": 0.017, "uncUnit": "%", "rdg": 0.0, "trace": "Viện ĐLVN (VMI)", "due": "2026-11-07", "certRange": 30},
-    {"id": "754 (66830024)", "kind": "e", "key": "754 (66830024)", "name": "Documenting Process Cal.", "model": "754", "serial": "66830024", "maker": "Fluke", "min": 0, "max": 30, "unit": "mA", "res": "0.001mA", "accuracy": "±(0.01% Rdg + 5 μA)", "unc": 0.017, "uncUnit": "%", "rdg": 0.0, "trace": "Viện ĐLVN (VMI)", "due": "2026-12-31", "certRange": 30}
+    {"id": "754 (66830024)", "kind": "e", "key": "754 (66830024)", "name": "Documenting Process Cal.", "model": "754", "serial": "66830024", "maker": "Fluke", "min": 0, "max": 30, "unit": "mA", "res": "0.001mA", "accuracy": "±(0.01% Rdg + 5 μA)", "unc": 0.017, "uncUnit": "%", "rdg": 0.0, "trace": "Viện ĐLVN (VMI)", "due": "2026-12-31", "certRange": 30},
+    {"id": "754 (3857051)", "kind": "e", "key": "754 (3857051)", "name": "Documenting Process Cal.", "model": "754", "serial": "3857051", "maker": "Fluke", "min": 0, "max": 30, "unit": "mA", "res": "0.001mA", "accuracy": "±(0.01% Rdg + 5 μA)", "unc": 0.017, "uncUnit": "%", "err": 0.001, "rdg": 0.0, "trace": "Viện ĐLVN (VMI)", "due": "2027-05-08", "certRange": 30},
+    {"id": "754 (61930026)", "kind": "r", "key": "754 (61930026)", "name": "Documenting Process Cal.", "model": "754", "serial": "3821003", "maker": "Fluke", "min": 0, "max": 1000, "unit": "Ω", "res": "0.001 Ω", "accuracy": "±(0.05% Rdg + 50 mΩ)", "unc": 0.008, "uncUnit": "%", "err": 0.03, "trace": "Viện ĐLVN (VMI)", "due": "2027-07-14"},
+    {"id": "RTC-159B Internal (654164-00305)", "kind": "t", "key": "RTC-159B Internal (654164-00305)", "name": "Reference Temperature Calibrator", "model": "RTC-159B", "serial": "654164-00305", "maker": "Ametek", "min": -100, "max": 155, "unit": "°C", "res": "0.001 °C", "accuracy": "±0.3 °C", "unc": 0.07, "uncUnit": "°C", "stab": 0, "radial": 0, "axial": 0, "heat": "Ametek RTC-159B", "trace": "Viện Đo lường Việt Nam (VMI)", "due": "2027-05-08"},
+    {"id": "9173 (B13638) low", "kind": "t", "key": "9173 (B13638) low", "name": "Metrology Well Calibrator", "model": "9173", "serial": "B13638", "maker": "Fluke", "min": 50, "max": 700, "unit": "°C", "res": "0.001 °C", "accuracy": "±0.2 °C", "unc": 0.25, "uncUnit": "°C", "stab": 0, "radial": 0, "axial": 0, "heat": "Fluke 9173", "trace": "Viện Đo lường Việt Nam (VMI)", "due": "2026-12-31"},
+    {"id": "9173 (B13638) high", "kind": "t", "key": "9173 (B13638) high", "name": "Metrology Well Calibrator", "model": "9173", "serial": "B13638", "maker": "Fluke", "min": 50, "max": 700, "unit": "°C", "res": "0.001 °C", "accuracy": "±0.25 °C", "unc": 0.4, "uncUnit": "°C", "stab": 0, "radial": 0, "axial": 0, "heat": "Fluke 9173", "trace": "Viện Đo lường Việt Nam (VMI)", "due": "2026-12-31"},
+    {"id": "9173 (B87357) low", "kind": "t", "key": "9173 (B87357) low", "name": "Metrology Well Calibrator", "model": "9173", "serial": "B87357", "maker": "Fluke", "min": 50, "max": 700, "unit": "°C", "res": "0.001 °C", "accuracy": "±0.2 °C", "unc": 0.35, "uncUnit": "°C", "stab": 0, "radial": 0, "axial": 0, "heat": "Fluke 9173", "trace": "Viện Đo lường Việt Nam (VMI)", "due": "2027-07-17"}
   ],
   // [Location (short, as on QTG), Location VN, Location EN, Customer VN, Customer EN] – sheet "Location" 2026
   locations: [
@@ -47,10 +56,11 @@ window.LabSeed = {
     ["Trạm LH", "Trạm Long Hải", "Long Hai LBV Station", "Chi nhánh Khí Đông Nam Bộ - Tổng công ty Khí Việt Nam – CTCP", "Petrovietnam Gas South East Branch"],
     ["GDC TH", "Trạm GDC Tiền Hải", "Tien Hai Gas Distribution Center", "Chi nhánh Khí Hải Phòng - TCT Khí Việt Nam - CTCP", "PVGAS Hai Phong"],
     ["LFS TH", "Trạm LFS Tiền Hải", "Tien Hai Lane Fall Station", "Chi nhánh Khí Hải Phòng - TCT Khí Việt Nam - CTCP", "PVGAS Hai Phong"],
-    ["Trạm LFS", "Trạm Tiếp Bờ", "Ca Mau Lane Fall Station", "TCT Khí Việt Nam - CTCP- Công ty Khí Cà Mau", "PetroVietnam Gas Ca Mau Company"],
-    ["LBV Cà Mau", "Trạm LBV Cà Mau", "Ca Mau LBV Station", "TCT Khí Việt Nam - CTCP- Công ty Khí Cà Mau", "PetroVietnam Gas Ca Mau Company"],
-    ["GDC CM", "Trạm GDC Cà Mau", "Ca Mau Gas Distribution Center", "TCT Khí Việt Nam - CTCP- Công ty Khí Cà Mau", "PetroVietnam Gas Ca Mau Company"],
-    ["GPP Cà Mau", "Nhà máy xử lý Khí Cà Mau", "Ca Mau Gas Processing Plant", "TCT Khí Việt Nam - CTCP- Công ty Khí Cà Mau", "PetroVietnam Gas Ca Mau Company"],
+    ["Trạm LFS", "Trạm Tiếp Bờ", "Ca Mau Lane Fall Station", "CN Khí Tây Nam Bộ - TCT Khí Việt Nam - CTCP", "Petrovietnam Gas South West Branch"],
+    ["LFS Cà Mau", "Trạm Tiếp Bờ (LFS)", "Ca Mau Land Fall Station", "CN Khí Tây Nam Bộ - TCT Khí Việt Nam - CTCP", "Petrovietnam Gas South West Branch"],
+    ["LBV Cà Mau", "Trạm LBV Cà Mau", "Ca Mau LBV Station", "CN Khí Tây Nam Bộ - TCT Khí Việt Nam - CTCP", "Petrovietnam Gas South West Branch"],
+    ["GDC CM", "Trạm GDC Cà Mau", "Ca Mau Gas Distribution Center", "CN Khí Tây Nam Bộ - TCT Khí Việt Nam - CTCP", "Petrovietnam Gas South West Branch"],
+    ["GPP Cà Mau", "Nhà máy xử lý Khí Cà Mau", "Ca Mau Gas Processing Plant", "CN Khí Tây Nam Bộ - TCT Khí Việt Nam - CTCP", "Petrovietnam Gas South West Branch"],
     ["NCS GPP", "Nhà máy xử lý Khí Nam Côn Sơn", "Nam Con Son Gas Processing Plant", "Công ty Đường Ống Khí Nam Côn Sơn", "NAMCONSON Pipeline Company."],
     ["Lab DVK", "Phòng Lab DVK", "VILAS 389", "TCT Khí Việt Nam - CTCP- Công ty Dịch Vụ Khí", "PetroVietnam Gas Services"],
     ["Xưởng ĐX", "Xưởng BDSC Đông Xuyên", "Dong Xuyen Maintenance WorkShop", "TCT Khí Việt Nam - CTCP- Công ty Dịch Vụ Khí", "PetroVietnam Gas Services"],
@@ -61,11 +71,12 @@ window.LabSeed = {
     ["Giàn TƯ", "Giàn Thiên Ưng", "Thien Ung Platform", "Chi nhánh Khí Đông Nam Bộ - Tổng công ty Khí Việt Nam – Công ty cổ phần", "Petrovietnam Gas South East Branch"]
   ],
   settings: {
-    ver: 2,
+    ver: 3,
     // Certificate header (MailMerge_PT_Cert / MailMerge_PS_Cert)
     certLines: ["TỔNG CÔNG TY KHÍ VIỆT NAM", "CÔNG TY DỊCH VỤ KHÍ", "PetroVietnam Gas Services Company", "Add: 101 Le Loi Street-Vung Tau Ward- Ho Chi Minh City", "Tel: 84.254.3586376, Fax: 84.254.3563180"],
     companyTag: "(ĐK 18)",
     labName: "PHÒNG THỬ NGHIỆM HIỆU CHUẨN",
+  labNameEN: "Experiment Calibration Laboratory",
     addrVN: "Địa chỉ: 101 Lê Lợi, Phường Vũng Tàu, Thành Phố Hồ Chí Minh",
     addrEN: "Add: 101 Le Loi Street-Vung Tau Ward- Ho Chi Minh City",
     tel: "Điện thoại <i>(Tel):</i> 84.254.3586376, Fax: 84.254.3563180",
@@ -82,6 +93,15 @@ window.LabSeed = {
     PT: { procedure: "DVK.LAB.TM.21", env: "Nhiệt độ (Temp): 23±2 ºC, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) °C", qtgHum: "(≤70) %RH",
           form: "TM.10.BM.112.2-1", qtgForm: "DVK.LAB.TM21.PL03", prefix: "CN.PT", bbPrefix: "BB.PT" },
     PS: { procedure: "ĐLVN 133:2004", env: "Nhiệt độ (Temp): 23±5 ºC, Độ ẩm (Humidity): <80%RH", qtgTemp: "(23 ± 5) °C", qtgHum: "(≤80) %RH",
-          form: "DVK.LAB.TM.10.BM.133-03", qtgForm: "ĐLVN 133:2004.PL1", prefix: "CN.PS", bbPrefix: "BB.PS" }
+          form: "DVK.LAB.TM.10.BM.133-03", qtgForm: "ĐLVN 133:2004.PL1", prefix: "CN.PS", bbPrefix: "BB.PS" },
+    // PG = verification (GCN kiểm định N256.yyA.nnnnn) – 08-2011_PG_CKS_Oct-2026.docx, QTG PG GPP T8 CKS.docx
+    PG: { procedure: "ĐLVN 08:2011", procVN: "ĐLVN 08:2011 Áp kế kiểu lò xo - Quy trình kiểm định", procEN: "ĐLVN 08:2011 PG with elastic sensing elements-Methods & means of verification",
+          qtgTemp: "(20 ± 5) °C", qtgHum: "< 80 %RH", qtgForm: "ĐLVN 08:2011.PL1", prefix: "N256", series: "A", bbPrefix: "BB.PG", env: "Nhiệt độ: 20±5 °C, Độ ẩm: <80%RH" },
+    TS: { procedure: "DVK.LAB.TM.13", env: "Nhiệt độ (Temp): (23±2)°C, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) °C", qtgHum: "(≤70) %RH",
+          form: "DLVNTM13", qtgForm: "BM.TM.13-1", prefix: "CN.TS", bbPrefix: "BB.TS" },
+    TT: { procedure: "DVK.LAB.TM.12", env: "Nhiệt độ (Temp): (23±2)°C, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) °C", qtgHum: "(≤70) %RH",
+          form: "DLVN188.2-2", qtgForm: "DVK.LAB.TM.12.PL2", prefix: "CN.TT", bbPrefix: "BB.TT" },
+    RTD: { procedure: "ĐLVN 125:2003", env: "Nhiệt độ (Temp): (23±2)°C, Độ ẩm (Humidity): <70%RH", qtgTemp: "(23 ± 2) °C", qtgHum: "≤50 %RH",
+          form: "TM.10.BM.125.2", qtgForm: "ĐLVN 125:2003.PL2", prefix: "CN.RTD", bbPrefix: "BB.RTD" }
   }
 };

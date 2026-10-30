@@ -45,11 +45,13 @@
   const wmImg = `<img class="wmimg" src="assets/wm.jpg" alt="">`;
 
   /* ================= CERTIFICATE ================= */
-  function certHeader(st) {
+  // variant "lab" (RTD / TS 2026 certificates): company + lab name lines instead of the corporation line
+  function certHeader(st, variant) {
     const L = st.certLines;
-    return `<div class="chdr">${st.showLogo ? `<img src="assets/logo2026.jpg" alt="">` : `<span class="nologo"></span>`}<div class="t">
-      <div>${esc(L[0])}</div><div class="b">${esc(L[1])} <span class="red">${esc(st.companyTag)}</span></div>
-      <div class="i">${esc(L[2])}</div><div class="i">${esc(L[3])}</div><div class="i">${esc(L[4])}</div></div></div><div class="crule"></div>`;
+    const t = variant === "lab"
+      ? `<div>${esc(L[1])} <span class="red b">${esc(st.companyTag)}</span></div><div class="i">${esc(L[2])}</div><div class="b">${esc(st.labName)}</div><div class="b i">${esc(st.labNameEN || "")}</div><div class="i">${esc(L[3])}</div><div class="i">${esc(L[4])}</div>`
+      : `<div>${esc(L[0])}</div><div class="b">${esc(L[1])} <span class="red">${esc(st.companyTag)}</span></div><div class="i">${esc(L[2])}</div><div class="i">${esc(L[3])}</div><div class="i">${esc(L[4])}</div>`;
+    return `<div class="chdr${variant === "lab" ? " lab" : ""}">${st.showLogo ? `<img src="assets/logo2026.jpg" alt="">` : `<span class="nologo"></span>`}<div class="t">${t}</div></div><div class="crule"></div>`;
   }
   const certFooter = (st, i, n) => `<table class="cftr"><tr><td class="pg"><b>Trang: ${i}/${n}</b><br><i>(No of paper)</i></td>
     <td><b>${esc(st.footerVN)}</b><br><i>${esc(st.footerEN)}</i></td></tr></table>`;
@@ -333,5 +335,5 @@
     return pages.join("");
   }
 
-  window.LabDocs = { certPage1, certPage2, qtgPage, uncPage, qcPages, dVN, dEN, toDate, esc, vn };
+  window.LabDocs = { certPage1, certPage2, qtgPage, uncPage, qcPages, dVN, dEN, toDate, esc, vn, vnTxt, decimalsOf, g, cb, it, draft, wmImg, certHeader, certFooter, qtgSig, envHtml, qModel, qRange, p2 };
 })();

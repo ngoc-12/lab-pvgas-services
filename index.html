@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>LAB PVGAS Services</title>
-<meta name="description" content="Nhập số liệu QTG, tính độ không đảm bảo đo và xuất chứng chỉ hiệu chuẩn PT/PS.">
+<meta name="description" content="Nhập số liệu QTG, tính độ không đảm bảo đo và xuất chứng chỉ hiệu chuẩn PT, PS, PG, TS, TT, RTD.">
 <meta name="theme-color" content="#f5f4ee">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -69,6 +69,9 @@ table.entry td{padding:3px}
 table.entry td.n{width:26px;text-align:center;color:var(--muted)}
 table.entry td.mut{text-align:center;font:13px var(--f-num);color:var(--muted)}
 table.entry input{font-family:var(--f-num);text-align:center;padding:9px 4px}
+table.entry.tt{min-width:500px}table.entry.tt td.n{width:auto}table.entry.tt td.n .pm{min-width:86px}
+table.entry.tt tr.sep td{border-bottom:1px solid var(--line,#ddd);padding-bottom:6px}
+.xs{overflow-x:auto}table.entry.rtd{min-width:520px}table.entry.rtd td.n{width:44px;font-size:12px}table.entry.rtd input{padding:9px 2px}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .btn{border:1px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:10px;padding:10px 13px;font:500 14px var(--f-ui);cursor:pointer}
 .btn.pri{background:var(--clay);border-color:var(--clay);color:var(--clay-ink)}
@@ -196,6 +199,54 @@ section.a4>*{position:relative;z-index:1}
 .a4 table.qct td{font-size:10.4px}
 .a4 .unote{font-size:11.5px;margin-top:3px}
 .a4 .ufoot{position:absolute;left:44px;right:40px;bottom:20px;font-size:10px;color:#444;border-top:1px solid #999;padding-top:3px;font-style:italic}
+/* ---- PG (GCN kiểm định) ---- */
+.a4.cert.pg{padding:40px 50px 0 46px;font-size:14px;line-height:17px}
+.a4.pg .pgwm{left:150px;top:250px;width:520px;opacity:1}
+.a4.pg .frame{border:3px double #1d4ea8}
+.a4 .pghdr{display:flex;align-items:flex-start;gap:6px;font-size:11.5px;line-height:14px;text-align:center;padding-top:6px}
+.a4 .pghdr img{width:66px;margin-top:12px}
+.a4 .pghdr .nologo{width:66px}
+.a4 .pghdr .l{flex:1.15}.a4 .pghdr .r{flex:1;font-size:12px}
+.a4 .pghdr .b{font-weight:700}.a4 .pghdr .i{font-style:italic}
+.a4 .pghdr .rl{width:110px;margin:3px auto 0;border-top:1px solid #000}
+.a4 h1.pgt{font:700 21px "Times New Roman",Tinos,serif;color:#e8124d;text-align:center;margin:30px 0 0}
+.a4 h1.pgt.r2{margin-top:64px}
+.a4 .pgs{text-align:center;color:#e8124d;font-weight:700;font-style:italic;font-size:14px}
+.a4 .pgs2{text-align:center;color:#e8124d;font-size:17px;margin-bottom:6px}
+.a4 table.pgkv{width:100%;border-collapse:collapse;margin-top:18px}
+.a4 table.pgkv td{vertical-align:top;padding:0 0 9px}
+.a4 table.pgkv td:first-child{width:34%;padding-left:4px}
+.a4 table.pgkv td.b{font-weight:700}.a4 table.pgkv td.b i.en{font-weight:400}
+.a4 table.pgkv td.red,.a4 table.pgkv td.red i{color:#e00000}
+.a4 table.pgkv .half{display:inline-block;width:60%}
+.a4 .pgi{width:52%;margin:0 0 0 auto}
+.a4 table.pgsig tr.sp td{height:76px}
+.a4 .pgfoot{position:absolute;left:36px;bottom:36px;font-size:11px;line-height:13px}
+.a4 .pgtag{margin:22px 0 4px}
+.a4 table.pgr td{height:16px;padding:0 3px}
+.a4 table.pgr td.pgnote{height:42px;vertical-align:middle}
+.a4 table.pgsig2{margin-top:22px}
+.a4 table.pgsig2 tr.sp td{height:76px}
+/* ---- temperature certificates ---- */
+.a4 .chdr.lab .t{font-size:14px;line-height:17px}
+.a4 table.ckv.tc td{padding:1px 0 2px}
+.a4 table.coef{margin:0 0 0 210px;border-collapse:collapse}
+.a4 table.coef td{padding:0 0 1px}
+.a4 table.tsr td{height:22px}
+/* ---- QTG for PG / TS / TT / RTD ---- */
+.a4.qtg.pgqtg table.dot{font-size:13px}
+.a4 table.pgred{margin-top:6px;font-size:13px}
+.a4 table.pgred tr.c td{text-align:center}
+.a4 table.pgq td{height:22px}
+.a4 table.pgkl{width:100%;margin-top:6px;font-size:13.6px;border-collapse:collapse}
+.a4 table.pgkl td{vertical-align:top;padding:2px 4px}
+.a4 table.pgkl td:first-child{width:40%}
+.a4 table.tsq th,.a4 table.ttq th,.a4 table.rtq th{font-size:12px;line-height:14px}
+.a4 table.ttq td{height:15px;padding:0 3px;font-size:13px;line-height:15px}
+.a4.qtg.ttqtg table.dot td{line-height:15.5px;font-size:13px}
+.a4.qtg.ttqtg h1.q{margin-top:8px}
+.a4 table.rtq td{height:24px}
+.a4 table.ukv td.ref{white-space:normal;word-break:break-all;font-size:9.5px}
 @media print{
   body *{visibility:hidden}
   #preview, #preview *{visibility:visible}
@@ -206,7 +257,7 @@ section.a4>*{position:relative;z-index:1}
 </style>
 </head>
 <body>
-<header class="top"><h1>LAB PVGAS Services</h1><small>Hiệu chuẩn PT · PS — nhập QTG, tính ĐKĐBĐ, xuất chứng chỉ</small></header>
+<header class="top"><h1>LAB PVGAS Services</h1><small>PT · PS · PG · TS · TT · RTD — nhập QTG, tính ĐKĐBĐ, xuất chứng chỉ</small></header>
 <main class="wrap">
   <section id="v-entry"></section>
   <section id="v-records" hidden></section>
@@ -224,8 +275,10 @@ section.a4>*{position:relative;z-index:1}
 <script src="vendor/html2canvas.min.js"></script>
 <script src="vendor/jspdf.umd.min.js"></script>
 <script src="calc.js"></script>
+<script src="calc2.js"></script>
 <script src="data.js"></script>
 <script src="docs.js"></script>
+<script src="docs2.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
