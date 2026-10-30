@@ -21,6 +21,15 @@
     const [i, f] = s.replace("-", "").split(".");
     return (neg ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (f ? "," + f : "");
   }
+  // Publication rules 30/10/2026: PT "1.350,5" (comma, thousands dot), TT "1350,5" (comma), PS "1350.5" (dot)
+  function nTxt(type, v, d) {
+    if (type === "PT" || !["PS", "TT"].includes(type)) return vn(v, d);
+    if (!isFinite(v)) return "";
+    let s = C.xround(v, d).toFixed(d); if (Number(s) === 0) s = s.replace("-", "");
+    return type === "TT" ? s.replace(".", ",") : s;
+  }
+  const uTxt = (type, u) => { const p = C.uPub(u); return nTxt(type, p.v, p.d); };
+  const dot = s => String(s == null ? "" : s).replace(/(\d),(\d)/g, "$1.$2");
   const vnTxt = s => String(s == null ? "" : s).replace(/(\d)\.(\d)/g, "$1,$2");   // "0.0001 bar" -> "0,0001 bar"
   const num = v => (v === "" || v == null) ? NaN : Number(String(v).replace(",", "."));
   function decimalsOf(arr) { let d = 0; arr.forEach(v => { const s = String(v == null ? "" : v).replace(",", "."); const i = s.indexOf("."); if (i >= 0) d = Math.max(d, s.length - i - 1); }); return d; }
@@ -39,7 +48,7 @@
   // QTG shows "Fluke 754" when the model is only a number
   const qModel = s => !s ? "" : (/^\d+$/.test(String(s.model)) ? `${s.maker} ${s.model}` : s.model);
   const qRange = s => !s ? "" : `(${s.min}÷${s.kind === "e" && s.certRange ? s.certRange : s.max}) ${s.unit}`;
-  const accTxt = (h, PT) => PT ? `±${vnTxt(h.acc)}%FS` : `±${vnTxt(h.acc)}%.Pset`;
+  const accTxt = (h, PT) => PT ? `±${vnTxt(h.acc)}%FS` : `±${dot(h.acc)}%.Pset`;
 
   const draft = info => info.draft ? `<div class="draft">BẢN NHÁP – ${esc(info.draft)}</div>` : "";
   const wmImg = `<img class="wmimg" src="assets/wm.jpg" alt="">`;
@@ -71,7 +80,7 @@
       top = row(`Tên đối tượng ${it("(Dut)")}:`, `Thiết bị đặt mức áp suất ${it(`(${esc(h.description)})`)}`)
         + row(`Kiểu ${it("(Type)")}: ${esc(h.model)}`, `Mã QL ${it("(Tag No)")}: ${esc(h.tag)}<br>Số hiệu ${it("(Serial No.)")}: ${esc(h.serial)}`)
         + row(`Nơi sản xuất ${it("(Manufacturer)")}:`, esc(h.maker))
-        + row(`Đặc trưng kỹ thuật đo lường (${it("Specification")}):`, `Dải làm việc ${it("(Calib Range)")}: (${vnTxt(h.min)} ÷ ${vnTxt(h.max)}) ${esc(h.unit)}<br>Áp suất đặt ${it("(Set point)")}: ${vnTxt(h.pset)} ${esc(h.unitPset)}<br>Độ chính xác ${it("(Accuracy)")}: ${accTxt(h, false)}`);
+        + row(`Đặc trưng kỹ thuật đo lường (${it("Specification")}):`, `Dải làm việc ${it("(Calib Range)")}: (${esc(dot(h.min))} ÷ ${esc(dot(h.max))}) ${esc(h.unit)}<br>Áp suất đặt ${it("(Set point)")}: ${esc(dot(h.pset))} ${esc(h.unitPset)}<br>Độ chính xác ${it("(Accuracy)")}: ${accTxt(h, false)}`);
     }
     top += row(`Cơ sở sử dụng ${it("(Customer)")}:`, esc(L.custVN))
       + row(`Địa điểm lắp đặt ${it("(Location)")}:`, esc(L.locVN))
@@ -103,8 +112,9 @@
     const h = rec.h, PT = rec.type === "PT", cal = toDate(h.calDate);
     let table, mid;
     if (PT) {
-      const pd = pDec(rec.pt.points), u = esc(h.unit);
-      const rows = res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(r.x, pd)}</td><td>${vn(r.ideal, 3)}</td><td>${vn(r.rise, 3)}</td><td>${vn(r.fall, 3)}</td><td>${vn(r.shcR, 3)}</td><td>${vn(r.shcF, 3)}</td><td>${vn(C.u3(r.U), 3)}</td></tr>`).join("");
+      // decimals per reading set (M = 3); corrections follow their reading set; U = 2 significant figures rounded up
+      const pd = C.pubDec(rec.pt.points, 3), dR = C.pubDec(res.rows.map(r => r.rise), 3), dF = C.pubDec(res.rows.map(r => r.fall), 3), u = esc(h.unit);
+      const rows = res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(r.x, pd)}</td><td>${vn(r.ideal, 3)}</td><td>${vn(r.rise, dR)}</td><td>${vn(r.fall, dF)}</td><td>${vn(r.shcR, dR)}</td><td>${vn(r.shcF, dF)}</td><td>${uTxt("PT", r.U)}</td></tr>`).join("");
       table = `<table class="res cres"><thead>
         <tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">AS đặt<br>${it("(Input Pressure)")}<br>${u}</th><th rowspan="2">Tín hiệu điện quy đổi<br>${it("(Ideal Output Current)")}<br>mA</th>
         <th colspan="2">Giá trị dòng trên thiết bị<br>${it("(Measured Output Current)")}<br>mA</th><th colspan="2">Số hiệu chính<br>${it("(Correction)")}<br>mA</th><th rowspan="2">Độ KĐBĐ<br>${it("(Uncertainty)")}<br>${u}</th></tr>
@@ -113,15 +123,16 @@
         <ul class="dash"><li>x: giá trị áp suất chỉ thị trên phương tiện chuẩn.<br>${it("(x: Value of Input pressure from standard device)")}</li>
         <li>y: giá trị tín hiệu điện chỉ trên phương tiện cần hiệu chuẩn.<br>${it("(y:Value of Measured output current from transmitter)")}</li></ul>
         <p>Độ không đảm bảo đo mở rộng lớn nhất được tính ứng với độ tin cậy 95%, hệ số phủ k=2:<br>${it("(The maximum expanded uncertainty is based upon a standard uncertainty multiplied by a coverage factor k = 2, providing a level of confidence of approximate 95%):")}</p>
-        <p class="c">U<sub>exp-max</sub> = ${vn(C.u3(res.Umax), 3)} ${u}</p>`;
+        <p class="c">U<sub>exp-max</sub> = ${uTxt("PT", res.Umax)} ${u}</p>`;
     } else {
-      const pd = pDec([h.pset, ...rec.ps.set, ...rec.ps.reset]), u = esc(h.unitPset), U = vnTxt(res.Utext.text);
-      const rows = res.set.map((v, i) => `<tr><td>${p2(i + 1)}</td>${i === 0 ? `<td rowspan="5">${vnTxt(h.pset)}</td>` : ""}<td>${vn(v, pd)}</td><td>${vn(res.reset[i], pd)}</td><td>${vn(res.setDev[i], pd)}</td><td>${vn(res.resetDev[i], pd)}</td>${i === 0 ? `<td rowspan="5">${U}</td>` : ""}</tr>`).join("");
+      // PS: dot decimal, decimals per reading set (M = 2), deviations follow their set
+      const dS = C.pubDec(res.set, 2), dR = C.pubDec(res.reset, 2), u = esc(h.unitPset), U = res.Utext.text, ps = (v, d) => nTxt("PS", v, d);
+      const rows = res.set.map((v, i) => `<tr><td>${p2(i + 1)}</td>${i === 0 ? `<td rowspan="5">${esc(dot(h.pset))}</td>` : ""}<td>${ps(v, dS)}</td><td>${ps(res.reset[i], dR)}</td><td>${ps(res.setDev[i], dS)}</td><td>${ps(res.resetDev[i], dR)}</td>${i === 0 ? `<td rowspan="5">${U}</td>` : ""}</tr>`).join("");
       table = `<table class="res cres"><thead><tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Áp suất đặt ${it("(Pset)")}<br>${u}</th><th rowspan="2">As tác động<br>${it("(Set-Pressure)")}<br>${u}</th><th rowspan="2">As trả về<br>${it("(Reset-Pressure)")}<br>${u}</th>
         <th colspan="2">Áp suất chênh lệch</th><th rowspan="2">Độ KĐBĐ<br>${it("(Uncertainty)")}<br>${u}</th></tr>
         <tr><th>${it("Set-deviation")}<br>${u}</th><th>${it("Reset-deviation")}<br>${u}</th></tr></thead><tbody>${rows}</tbody></table>`;
       mid = `<p>Độ không đảm bảo đo mở rộng được tính ứng với độ tin cậy 95%, hệ số phủ k=2:<br>${it("(The reported expanded uncertainty is based upon a standard uncertainty multiplied by a coverage factor k = 2, providing a level of confidence of approximate 95%):")}</p>
-        <p class="c">Giá trị cài đặt ${it("(Set point)")}: ${vnTxt(h.pset)} ${u}, U = ${U} ${u}</p>`;
+        <p class="c">Giá trị cài đặt ${it("(Set point)")}: ${esc(dot(h.pset))} ${u}, U = ${U} ${u}</p>`;
     }
     const pf = res.pass ? "Đạt (Pass)" : "Không đạt (Fail)";
     const en = res.pass ? "(The calibration result meets the accuracy requirement)." : "(The calibration result does not meet the accuracy requirement).";
@@ -155,7 +166,7 @@
   function qtgPage(rec, res, st, info) {
     const h = rec.h, PT = rec.type === "PT", cal = toDate(h.calDate), L = locOf(info);
     const S = PT ? st.PT : st.PS, s1 = info.stand1, s2 = info.stand2;
-    const bb = `${S.bbPrefix}.${rec.certNo.split(".").slice(-2).join(".")}`;
+    const bb = rec.certNo ? `${S.bbPrefix}.${rec.certNo.split(".").slice(-2).join(".")}` : "";
     const asF = h.psType === "As Found", asL = h.psType === "As Left";
     let tbl, data;
     if (PT) {
@@ -263,11 +274,11 @@
         </table></div>`;
       const pd = pDec(rec.pt.points);
       const out = `<table class="res ug"><thead><tr><th>Áp suất chuẩn<br>B46</th><th>Quy đổi mA<br>C46</th><th>DUT tăng<br>D46</th><th>DUT giảm<br>E46</th><th>SHC tăng<br>F46</th><th>SHC giảm<br>G46</th><th>SHC TB<br>H46</th><th>Uc,i(tb) %<br>I46</th><th>Uexp ${esc(h.unit)}<br>J46</th><th>Uexp %<br>K46</th><th>In CC<br>${esc(h.unit)}</th></tr></thead><tbody>
-        ${res.rows.map(r => `<tr><td>${g(r.x)}</td><td>${g(r.ideal)}</td><td>${r.rise}</td><td>${r.fall}</td><td>${g(r.shcR, 4)}</td><td>${g(r.shcF, 4)}</td><td>${g(r.shcAvg, 4)}</td><td>${g(r.ucAvg, 6)}</td><td>${g(r.U, 6)}</td><td>${g(r.Upct, 6)}</td><td><b>${vn(C.u3(r.U), 3)}</b></td></tr>`).join("")}</tbody></table>`;
+        ${res.rows.map(r => `<tr><td>${g(r.x)}</td><td>${g(r.ideal)}</td><td>${r.rise}</td><td>${r.fall}</td><td>${g(r.shcR, 4)}</td><td>${g(r.shcF, 4)}</td><td>${g(r.shcAvg, 4)}</td><td>${g(r.ucAvg, 6)}</td><td>${g(r.U, 6)}</td><td>${g(r.Upct, 6)}</td><td><b>${uTxt("PT", r.U)}</b></td></tr>`).join("")}</tbody></table>`;
       const ratioI = res.shcMax / res.limI, ratioU = res.Umax / res.limU;
       const chk = `<table class="res ug chk"><thead><tr><th>Max |SHC| (mA)</th><th>Giới hạn SHC = acc%×16</th><th>SHC / giới hạn</th><th>U lớn nhất (${esc(h.unit)})</th><th>Giới hạn U = acc%×span</th><th>U / giới hạn</th><th>Kết luận</th></tr></thead>
         <tbody><tr><td>${g(res.shcMax, 4)}</td><td>${g(res.limI, 4)}</td><td class="${ratioI > 1 ? "bad" : ""}">${(ratioI * 100).toFixed(1)}%</td><td>${g(res.Umax, 6)}</td><td>${g(res.limU, 6)}</td><td class="${ratioU > 1 ? "bad" : ""}">${(ratioU * 100).toFixed(1)}%</td><td><b>${res.pass ? "Đạt (Pass)" : "Không đạt (Fail)"}</b></td></tr></tbody></table>
-        <div class="unote">Giá trị in trên chứng chỉ: y = ${vn(res.a, 3)} + ${vn(res.b, 3)} x · U<sub>exp-max</sub> = ${vn(C.u3(res.Umax), 3)} ${esc(h.unit)} (Data112!CZ làm tròn 4 số rồi in 3 số lẻ).</div>`;
+        <div class="unote">Giá trị in trên chứng chỉ: y = ${vn(res.a, 3)} + ${vn(res.b, 3)} x · U<sub>exp-max</sub> = ${uTxt("PT", res.Umax)} ${esc(h.unit)} (quy tắc 30/10/2026: 2 chữ số có nghĩa, làm tròn lên).</div>`;
       body = inp + `<div class="ulbl">Bảng tính theo điểm (R = Rising, F = Failing) – hàng Excel 19–25, 38:</div>` + grid + reg
         + `<div class="ulbl">Kết quả hiệu chuẩn (hàng 44–50):</div>` + out + `<div class="ulbl">Kiểm tra (sheet "Kiểm tra"):</div>` + chk;
     } else {
@@ -293,7 +304,7 @@
         </table><table class="ukv">
           ${r3("F34", "8.3 uc AS mở", g(res.F34, 6))}${r3("F35", "uc AS đóng", g(res.F35, 6))}
           ${r3("F37", "8.4 U mở = E18·F34", g(res.F37, 6))}${r3("F38", "U đóng = E18·F35", g(res.F38, 6))}
-          ${r3("I42", "U báo cáo (theo chiều " + res.dir + ")", g(res.U, 6), esc(h.unitPset))}${r3("", "In chứng chỉ (làm tròn lên)", `<b>${vnTxt(res.Utext.text)}</b>`, esc(h.unitPset))}
+          ${r3("I42", "U báo cáo (theo chiều " + res.dir + ")", g(res.U, 6), esc(h.unitPset))}${r3("", "In chứng chỉ (2 chữ số có nghĩa, làm tròn lên)", `<b>${res.Utext.text}</b>`, esc(h.unitPset))}
         </table></div>`;
       const pd = pDec([h.pset, ...rec.ps.set, ...rec.ps.reset]);
       const out = `<table class="res ug"><thead><tr><th>Lần<br>C42</th><th>Pset<br>D42</th><th>Set<br>E42</th><th>Reset<br>F42</th><th>Set-deviation<br>G42</th><th>Reset-deviation<br>H42</th></tr></thead><tbody>
@@ -320,7 +331,7 @@
         const h = rec.h;
         if (PT) {
           const rI = res.shcMax / res.limI;
-          return `<tr><td>${p + i + 1}</td><td>${esc(rec.certNo.split(".").pop())}</td><td class="l">${esc(h.tag)}</td><td>${esc(h.model)}</td><td>${esc(h.min)}–${esc(h.max)} ${esc(h.unit)}</td><td class="l">${esc(rec.s1key)}</td><td class="l">${esc(rec.s2key)}</td><td>${esc(h.calDate)}</td><td>${g(res.shcMax, 3)}</td><td>${g(res.limI, 3)}</td><td class="${rI > 1 ? "bad" : ""}">${(rI * 100).toFixed(0)}%</td><td>${vn(C.u3(res.Umax), 3)}</td><td>${g(res.limU, 4)}</td><td class="${res.pass ? "" : "bad"}">${res.pass ? "Đạt" : "Không đạt"}</td></tr>`;
+          return `<tr><td>${p + i + 1}</td><td>${esc(rec.certNo.split(".").pop())}</td><td class="l">${esc(h.tag)}</td><td>${esc(h.model)}</td><td>${esc(h.min)}–${esc(h.max)} ${esc(h.unit)}</td><td class="l">${esc(rec.s1key)}</td><td class="l">${esc(rec.s2key)}</td><td>${esc(h.calDate)}</td><td>${g(res.shcMax, 3)}</td><td>${g(res.limI, 3)}</td><td class="${rI > 1 ? "bad" : ""}">${(rI * 100).toFixed(0)}%</td><td>${uTxt("PT", res.Umax)}</td><td>${g(res.limU, 4)}</td><td class="${res.pass ? "" : "bad"}">${res.pass ? "Đạt" : "Không đạt"}</td></tr>`;
         }
         const md = Math.max(...res.setDev.map(Math.abs)), rr = res.J42 / res.K42;
         return `<tr><td>${p + i + 1}</td><td>${esc(rec.certNo.split(".").pop())}</td><td class="l">${esc(h.tag)}</td><td>${esc(h.pset)}</td><td>${esc(h.unitPset)}</td><td>${res.dir}</td><td>${g(res.K42, 4)}</td><td class="l">${esc(rec.s1key)}</td><td>${esc(h.calDate)}</td><td>${g(md, 4)}</td><td>${esc(res.Utext.text)}</td><td>${g(res.J42, 4)}</td><td class="${rr > 1 ? "bad" : ""}">${(rr * 100).toFixed(0)}%</td><td class="${res.pass ? "" : "bad"}">${res.pass ? "Đạt" : "Không đạt"}</td></tr>`;
@@ -335,5 +346,5 @@
     return pages.join("");
   }
 
-  window.LabDocs = { certPage1, certPage2, qtgPage, uncPage, qcPages, dVN, dEN, toDate, esc, vn, vnTxt, decimalsOf, g, cb, it, draft, wmImg, certHeader, certFooter, qtgSig, envHtml, qModel, qRange, p2 };
+  window.LabDocs = { nTxt, uTxt, dot, certPage1, certPage2, qtgPage, uncPage, qcPages, dVN, dEN, toDate, esc, vn, vnTxt, decimalsOf, g, cb, it, draft, wmImg, certHeader, certFooter, qtgSig, envHtml, qModel, qRange, p2 };
 })();

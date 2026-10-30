@@ -27,16 +27,25 @@
   //  fraction ≥ 0.1  -> 2 decimals ; 0.01–0.099 -> 3 decimals ; 0.001–0.0099 -> 4 decimals.
   // Excel returns 0 when the fraction is < 0.001 (e.g. U = 2.0000); we fall back to 4 decimals instead
   // and flag it, so a certificate never prints U = 0.
-  function roundUnc(x) {
-    if (!isFinite(x)) return { text: "—", flag: false };
-    const frac = xround(x - Math.floor(x), 4);
-    const digits = String(Math.round(frac * 1e4)).length;
-    const frac4 = Math.round(frac * 1e4);
-    if (frac4 >= 1000 || (digits === 4)) return { text: xround(x + 0.005, 2).toFixed(2), flag: false };
-    if (frac4 >= 100) return { text: xround(x + 0.0005, 3).toFixed(3), flag: false };
-    if (frac4 >= 10) return { text: xround(x + 0.00005, 4).toFixed(4), flag: false };
-    return { text: xround(x + 0.00005, 4).toFixed(4), flag: true };
+  /* Publication rules 30/10/2026 (PT / PS / TT):
+   * U: two significant figures, rounded UP, never better than calculated.
+   *   D = 1 - INT(ROUND(LOG10(u),9)); r = ROUNDUP(ROUND(u,D+6),D); printed with MAX(0, 1-INT(ROUND(LOG10(r),9))) decimals; u = 0 -> "0". */
+  function uPub(u) {
+    if (!isFinite(u)) return { v: NaN, d: 0 };
+    if (!(u > 0)) return { v: 0, d: 0 };
+    const D = 1 - Math.floor(xround(Math.log10(u), 9));
+    const s = xround(xround(u, D + 6) * Math.pow(10, D), 6);
+    const r = D >= 0 ? Math.ceil(s) / Math.pow(10, D) : Math.ceil(s) * Math.pow(10, -D);
+    return { v: r, d: Math.max(0, 1 - Math.floor(xround(Math.log10(r), 9))) };
   }
+  // Readings: decimals of a set = max over its values of the smallest k (0..M) with ROUND(x,k) = ROUND(x,M)
+  function pubDec(arr, M) {
+    let d = 0;
+    arr.forEach(x => { x = Number(String(x).replace(",", ".")); if (!isFinite(x)) return; const t = xround(x, M); let k = 0; while (k < M && xround(x, k) !== t) k++; if (k > d) d = k; });
+    return d;
+  }
+  // PS keeps its text API: dot decimal, no thousands separator
+  function roundUnc(x) { const p = uPub(x); return isFinite(p.v) ? { text: p.v.toFixed(p.d), flag: false, v: p.v } : { text: "—", flag: false }; }
 
   // Certificate PT 2026: Data112!GC/GQ keep 4 decimals, the mail-merge prints 3 ("0,320").
   function u3(x) { return isFinite(x) ? xround(xround(x, 4), 3) : NaN; }
@@ -161,7 +170,7 @@
   // Data112!V/X : EOMONTH(calDate, months)
   function eomonth(d, months) { return new Date(d.getFullYear(), d.getMonth() + months + 1, 0); }
 
-  const api = { UNITS, factor, xround, roundUnc, u3, calcPT, calcPS, eomonth, steyx, linest };
+  const api = { UNITS, factor, xround, roundUnc, uPub, pubDec, u3, calcPT, calcPS, eomonth, steyx, linest };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.LabCalc = api;
 })(typeof self !== "undefined" ? self : this);

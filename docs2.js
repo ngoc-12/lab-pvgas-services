@@ -8,7 +8,7 @@
 (function () {
   "use strict";
   const C = window.LabCalc, D = window.LabDocs;
-  const { esc, vn, vnTxt, dVN, dEN, toDate, decimalsOf, g, cb, it, draft, wmImg, certHeader, certFooter, qtgSig, envHtml, qModel, p2 } = D;
+  const { nTxt, uTxt, esc, vn, vnTxt, dVN, dEN, toDate, decimalsOf, g, cb, it, draft, wmImg, certHeader, certFooter, qtgSig, envHtml, qModel, p2 } = D;
   const num = v => (v === "" || v == null) ? NaN : Number(String(v).replace(",", "."));
   const clampDec = (arr, lo, hi) => Math.min(hi, Math.max(lo, decimalsOf(arr)));
   const MONEN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -28,7 +28,7 @@
   }
   const accTxt = (h, unit) => `±${vnTxt(h.acc)}%${unit}`;
   function S(st, type) { return st[type] || {}; }
-  function bbNo(rec, st) { return `${S(st, rec.type).bbPrefix}.${rec.certNo.split(".").slice(-2).join(".")}`; }
+  function bbNo(rec, st) { if (!rec.certNo) return ""; return `${S(st, rec.type).bbPrefix}.${rec.certNo.split(".").slice(-2).join(".")}`; }
   function due(rec, st) { return C.eomonth(toDate(rec.h.calDate), Number(st.dueMonths) || 12); }
 
   /* Standards block of the 2026 temperature certificates: values of each standard joined with "; " (Data188!AZ:BF) */
@@ -97,11 +97,13 @@
         <th>Chênh mở<br>${it("(Set-deviation)")}<br>${deg}</th><th>Chênh đóng<br>${it("(Reset-deviation)")}<br>${deg}</th><th>Độ KĐBĐ<br>${it("(Uncertainty)")}<br>${deg}</th></tr></thead><tbody>${rows}</tbody></table>`;
       mid = K2 + `<p class="c">U = ${U}${deg}</p>`;
     } else if (T === "TT") {
-      const rows = res.pt.map((p, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(p.stdT, 3)}</td><td>${vn(p.ideal, 3)}</td><td>${vn(p.rise, 3)}</td><td>${vn(p.fall, 3)}</td><td>${vn(p.cR, 3)}</td><td>${vn(p.cF, 3)}</td><td>${vn(p.err, 3)}</td></tr>`).join("");
+      // publication rules 30/10/2026: comma decimal, no thousands separator, decimals per reading set (M = 3)
+      const t = (v, d) => nTxt("TT", v, d), dS = C.pubDec(res.pt.map(p => p.stdT), 3), dR = C.pubDec(res.pt.map(p => p.rise), 3), dF = C.pubDec(res.pt.map(p => p.fall), 3);
+      const rows = res.pt.map((p, i) => `<tr><td>${p2(i + 1)}</td><td>${t(p.stdT, dS)}</td><td>${t(p.ideal, 3)}</td><td>${t(p.rise, dR)}</td><td>${t(p.fall, dF)}</td><td>${t(p.cR, dR)}</td><td>${t(p.cF, dF)}</td><td>${t(p.err, 3)}</td></tr>`).join("");
       table = `<table class="res cres"><thead><tr><th rowspan="2">TT<br>${it("(N<sup>o</sup>)")}</th><th rowspan="2">Nhiệt độ chuẩn<br>${it("(Standard Temp)")}<br>${deg}</th><th rowspan="2">Tín hiệu điện quy đổi<br>${it("(Ideal Output Current)")}<br>mA</th>
         <th colspan="2">Giá trị dòng trên thiết bị<br>${it("(Measured Output Current)")}<br>mA</th><th colspan="2">Số hiệu chính<br>${it("(Correction)")}<br>mA</th><th rowspan="2">Sai lệch<br>${it("(Error)")}<br>%</th></tr>
         <tr><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th><th>Tăng<br>${it("(Increasing)")}</th><th>Giảm<br>${it("(Decreasing)")}</th></tr></thead><tbody>${rows}</tbody></table>`;
-      const lines = res.lines.map(l => `<p class="c"><b><i>- Dải đo (Range) (${vn(l.from, decimalsOf([C.xround(l.from, 4)]))} ÷ ${vn(l.to, decimalsOf([C.xround(l.to, 4)]))})${deg} : U = ${vn(C.u3(l.U), 3)}${deg}.</i></b></p>`).join("");
+      const lines = res.lines.map(l => `<p class="c"><b><i>- Dải đo (Range) (${nTxt("TT", l.from, C.pubDec([l.from], 3))} ÷ ${nTxt("TT", l.to, C.pubDec([l.to], 3))})${deg} : U = ${uTxt("TT", l.U)}${deg}.</i></b></p>`).join("");
       mid = K2 + lines;
     } else {
       const rows = res.rows.map((r, i) => `<tr><td>${p2(i + 1)}</td><td>${vn(r.nom, 1)}</td><td>${vn(r.std, 3)}</td><td>${vn(r.dut, 2)}</td><td>${vn(r.Rfit, 2)}</td><td>${vn(r.eO, 2)}</td><td>${vn(r.eC, 2)}</td></tr>`).join("");
@@ -419,7 +421,7 @@
       ${rr("Ultb chuẩn (36)", x => g(x.UltbS, 4))}${rr("uch4 tản mạn = Ultb/√n (37)", x => g(x.uch4, 4))}${rr("uch1 nhiệt kế chuẩn = U/2 (38)", x => g(x.uch1, 4))}
       ${rr("uch5 chỉ thị chuẩn (39)", x => g(x.uch5, 4))}${rr("uch2 ampe kế (F40)", () => g(res.F40, 4))}${rr("uch3 thiết bị tạo MT (41)", x => g(x.uch3, 4))}${rr("uch (42)", x => g(x.uch, 4))}
       ${rr("Ultb DUT (49)", x => g(x.UltbD, 4))}${rr("ubk1 = Ultb·Cj/√n (50)", x => g(x.ubk1, 4))}${rr("ubk2 hồi trễ = hyst·Cj/(2√3) (51)", x => g(x.ubk2, 4))}
-      ${rr("ubk3 phân giải (F52)", () => g(res.F52, 4))}${rr("uDUT (53)", x => g(x.uDUT, 4))}${rr("uc (54)", x => g(x.uc, 4))}${rr("Uexp = 2·uc (55)", x => g(x.U, 6))}${rr("In chứng chỉ", x => `<b>${vn(C.u3(x.U), 3)}</b>`)}</tbody></table>`;
+      ${rr("ubk3 phân giải (F52)", () => g(res.F52, 4))}${rr("uDUT (53)", x => g(x.uDUT, 4))}${rr("uc (54)", x => g(x.uc, 4))}${rr("Uexp = 2·uc (55)", x => g(x.U, 6))}${rr("In chứng chỉ (2 CSCN, làm tròn lên)", x => `<b>${uTxt("TT", x.U)}</b>`)}</tbody></table>`;
     const chk = `<table class="res ug chk"><thead><tr><th>Max sai lệch %</th><th>Max U (°C)</th><th>Max |SHC| (mA)</th><th>Giới hạn FJ = Acc/100·span (°C)</th><th>Kết luận (FI)</th></tr></thead>
       <tbody><tr><td>${g(res.maxErr, 4)}</td><td>${g(res.Umax, 4)}</td><td>${g(res.maxSHC, 4)}</td><td>${g(res.lim, 4)}</td><td>${verdict(res.pass)}</td></tr></tbody></table>
       <div class="unote">Data188!FI so sánh chung sai lệch (%), U (°C) và SHC (mA) với một giới hạn tính bằng °C – giữ nguyên như file, cần xác nhận.</div>`;

@@ -156,8 +156,7 @@
         }
       }
     } catch (e) { out.errors.push("Lỗi tính: " + e.message); }
-    if (out.res && out.res.Utext && out.res.Utext.flag) out.warns.push("U rất nhỏ: Excel sẽ in 0, app làm tròn lên 4 số lẻ");
-    if (out.res && rec.type === "PT" && C.u3(out.res.Umax) === 0) out.warns.push("Uexp-max < 0,0005: chứng chỉ (3 số lẻ) sẽ in 0,000 – xem lại đơn vị");
+    if (out.res && !out.res.pass) out.warns.push("Không đạt: không cấp số chứng chỉ / số tem và không xuất chứng chỉ (quy tắc 30/10/2026)");
     return out;
   }
 
@@ -199,6 +198,7 @@
           const pts = rec.tt.sr.map((_, p) => ({ sr: rec.tt.sr[p].map(num), sf: rec.tt.sf[p].map(num), dr: rec.tt.dr[p].map(num), df: rec.tt.df[p].map(num) }));
           out.res = C2.calcTT({ min: mn, max: mx, acc, pts, s1, s2: s2 || s1, amm: { unc: s3.unc, uncUnit: s3.uncUnit, min: s3.min, max: s3.max, err: s3.err || 0 }, res: num(h.res) || 0 });
           if ((out.res.nM || out.res.nH) && !s2) W.push("Có điểm > 150 °C nhưng chưa chọn chuẩn dải trung/cao (Stand2) – đang dùng Stand1");
+          if (!out.res.pass) W.push("Không đạt: không cấp số chứng chỉ / số tem và không xuất chứng chỉ (quy tắc 30/10/2026)");
           if (out.res.lowSingle) W.push("Dải thấp chỉ có 1 điểm: chứng chỉ không in dòng U dải thấp (như Data188)");
         }
       } else if (T === "RTD") {
@@ -214,9 +214,17 @@
     } catch (e) { E.push("Lỗi tính: " + e.message); }
     return out;
   }
+  // Rule 30/10/2026 §4 (PT/PS/TT): a failed instrument gets no certificate number and no certificate, not even a draft
+  const NOCERT = ["PT", "PS", "TT"];
+  const failed = c => NOCERT.includes(rec.type) && c.res && !c.res.pass;
+  function syncCertNo(c) {
+    if (!rec.certAuto && !failed(c)) return;
+    if (failed(c)) { rec.certNo = ""; rec.certAuto = true; } else if (!rec.certNo) rec.certNo = autoCertNo();
+    const f = $("#f_certNo"); if (f) { f.value = rec.certNo; f.placeholder = failed(c) ? "Không đạt – không cấp số" : autoCertNo(); }
+  }
   function summaryU(type, r) {
     if (!r) return "";
-    return type === "PT" ? D.vn(C.u3(r.Umax), 3) : type === "PS" ? r.Utext.text : type === "PG" ? "—" : type === "TS" ? D.vn(r.Uprint, 2) : type === "TT" ? D.vn(C.u3(r.Umax), 3) : D.vn(r.U, 2);
+    return type === "PT" ? D.uTxt("PT", r.Umax) : type === "PS" ? r.Utext.text : type === "PG" ? "—" : type === "TS" ? D.vn(r.Uprint, 2) : type === "TT" ? D.uTxt("TT", r.Umax) : D.vn(r.U, 2);
   }
 
   /* ---------- render: entry ---------- */
@@ -311,7 +319,7 @@
       <div id="preview"></div>`;
     if (!rec.certNo) rec.certNo = autoCertNo();
     $("#f_certNo").value = rec.certNo;
-    renderResult();
+    renderResult();   // syncCertNo blanks the number when the result fails
   }
 
   // Entry blocks for PG / TS / TT / RTD (fields follow the 2026 QTG forms)
@@ -402,7 +410,7 @@
       + `<table class="mini"><thead><tr><th>Lần</th><th>Set</th><th>Reset</th><th>Set-dev</th><th>Reset-dev</th></tr></thead><tbody>
         ${r.set.map((v, i) => `<tr><td>${i + 1}</td><td>${v}</td><td>${r.reset[i]}</td><td>${f3(r.setDev[i])}</td><td>${f3(r.resetDev[i])}</td></tr>`).join("")}</tbody></table>
         <details><summary>Bảng tính chi tiết cho Quality Checker</summary><div class="qc"><div>utm=${r.F30.toPrecision(6)} · utd=${r.F31.toPrecision(6)} · uch1=${r.F33.toPrecision(6)} · uch3=${r.F35.toPrecision(6)} · U chưa làm tròn=${r.U.toPrecision(8)}</div>${qc}</div></details>`;
-    if (T === "TT") return vd(r.lines.map(l => `${l.from}÷${l.to} °C: U = ${f3(C.u3(l.U))}`).join(" · ") + ` · max sai lệch ${r.maxErr.toPrecision(4)}%`)
+    if (T === "TT") return vd(r.lines.map(l => `${l.from}÷${l.to} °C: U = ${D.uTxt("TT", l.U)}`).join(" · ") + ` · max sai lệch ${r.maxErr.toPrecision(4)}%`)
       + `<table class="mini"><thead><tr><th>Chuẩn °C</th><th>mA lý tưởng</th><th>SHC ↑</th><th>SHC ↓</th><th>%</th></tr></thead><tbody>
         ${r.pt.map(p => `<tr><td>${f3(p.stdT)}</td><td>${f3(p.ideal)}</td><td>${f3(p.cR)}</td><td>${f3(p.cF)}</td><td>${f3(p.err)}</td></tr>`).join("")}</tbody></table>
         <details><summary>Bảng tính chi tiết cho Quality Checker</summary><div class="qc"><div>Cj=${r.Cj.toPrecision(6)} · điểm thấp/trung/cao = ${r.nL}/${r.nM}/${r.nH} · uch2 ampe kế=${r.F40.toPrecision(6)}</div>
@@ -416,14 +424,15 @@
 
   function renderResult() {
     const c = compute(), el = $("#result"); if (!el) return;
+    syncCertNo(c);
     const msgs = c.errors.map(e => `<li class="bad">${esc(e)}</li>`).join("") + c.warns.map(e => `<li class="warn">${esc(e)}</li>`).join("");
     let body = "";
     const r = c.res;
     if (r && NEWT.includes(rec.type)) body = renderNewResult(r);
     else if (r && rec.type === "PT") {
-      body = `<div class="verdict ${r.pass ? "ok" : "ko"}">${r.pass ? "ĐẠT (Pass)" : "KHÔNG ĐẠT (Fail)"}<small>U<sub>exp-max</sub> = ${D.vn(C.u3(r.Umax), 3)} ${esc(rec.h.unit)} · y = ${D.vn(r.a, 3)} + ${D.vn(r.b, 3)} x</small></div>
+      body = `<div class="verdict ${r.pass ? "ok" : "ko"}">${r.pass ? "ĐẠT (Pass)" : "KHÔNG ĐẠT (Fail)"}<small>U<sub>exp-max</sub> = ${D.uTxt("PT", r.Umax)} ${esc(rec.h.unit)} · y = ${D.vn(r.a, 3)} + ${D.vn(r.b, 3)} x</small></div>
         <table class="mini"><thead><tr><th>AS</th><th>mA lý tưởng</th><th>SHC ↑</th><th>SHC ↓</th><th>U (${esc(rec.h.unit)})</th></tr></thead><tbody>
-        ${r.rows.map(x => `<tr><td>${x.x}</td><td>${x.ideal.toFixed(3)}</td><td class="${Math.abs(x.shcR) > r.limI ? "bad" : ""}">${x.shcR.toFixed(3)}</td><td class="${Math.abs(x.shcF) > r.limI ? "bad" : ""}">${x.shcF.toFixed(3)}</td><td>${D.vn(C.u3(x.U), 3)}</td></tr>`).join("")}</tbody></table>
+        ${r.rows.map(x => `<tr><td>${x.x}</td><td>${x.ideal.toFixed(3)}</td><td class="${Math.abs(x.shcR) > r.limI ? "bad" : ""}">${x.shcR.toFixed(3)}</td><td class="${Math.abs(x.shcF) > r.limI ? "bad" : ""}">${x.shcF.toFixed(3)}</td><td>${D.uTxt("PT", x.U)}</td></tr>`).join("")}</tbody></table>
         <details><summary>Bảng tính chi tiết cho Quality Checker</summary><div class="qc">
           <div>Giới hạn: U ≤ ${r.limU.toPrecision(6)} ${esc(rec.h.unit)} (${r.checks.uOK ? "OK" : "VƯỢT"}) · |SHC| ≤ ${r.limI.toPrecision(4)} mA (${r.checks.iOK ? "OK" : "VƯỢT"})</div>
           <div>Sy=${r.Sy.toPrecision(6)} · Sa=${r.Sa.toPrecision(6)} · Sb=${r.Sb.toPrecision(6)} · r=${r.r.toPrecision(6)} · uv=${r.uv.toPrecision(6)}% · E12=${r.E12.toPrecision(6)}%</div>
@@ -530,7 +539,7 @@
   }
   function saveRecord() {
     if (!rec.h.tag) { toast("Nhập Tag trước khi lưu"); return; }
-    const c = compute();
+    const c = compute(); syncCertNo(c);
     rec.saved = true; rec.updated = new Date().toISOString();
     rec.summary = c.res ? { pass: c.res.pass, U: summaryU(rec.type, c.res) } : null;
     const i = records.findIndex(r => r.id === rec.id);
@@ -549,7 +558,17 @@
   function pagesHtml(which) {
     const { c, info } = docInfo();
     if (!c.res) { toast(c.errors[0] || "Chưa đủ số liệu"); return null; }
+    if (failed(c)) {
+      if (which === "cert") { toast("Không đạt: không xuất chứng chỉ (kể cả bản nháp)"); return null; }
+      if (which === "all") toast("Không đạt: bộ PDF chỉ gồm Biên bản và bảng Uncer");
+      which = which === "all" ? "noCert" : which;
+    }
     const a = [], P = D2.PAGES[rec.type];
+    if (which === "noCert") {
+      a.push(P ? P.q(rec, c.res, settings, info) : D.qtgPage(rec, c.res, settings, info));
+      a.push(P ? P.u(rec, c.res, settings, info) : D.uncPage(rec, c.res, settings, info));
+      return a.join("");
+    }
     if (P) {
       if (which === "qtg" || which === "all") a.push(P.q(rec, c.res, settings, info));
       if (which === "cert" || which === "all") a.push(P.c1(rec, c.res, settings, info), P.c2(rec, c.res, settings, info));
@@ -762,7 +781,7 @@
       ${pt.rows.map((r, i) => line(`PT-1506A Uexp điểm ${i + 1}`, r.U, expPT[i])).join("")}
       ${line("PT-1506A a", C.xround(pt.a, 4), 4.0321)}${line("PT-1506A b", C.xround(pt.b, 6), 0.159724)}
       ${line("PSHH-0522 U", ps.U, 0.234980850283593)}</tbody></table>
-      <p class="hint">PT-1506A: ${pt.pass ? "Pass" : "Fail"}, in U<sub>exp-max</sub> = ${D.vn(C.u3(pt.Umax), 3)} kPa (chứng chỉ mẫu 0,080). PSHH-0522: ${ps.pass ? "Pass" : "Fail"}, chiều ${ps.dir}, in U = ${ps.Utext.text} kPa (Excel 0.24).</p>`;
+      <p class="hint">PT-1506A: ${pt.pass ? "Pass" : "Fail"}, in U<sub>exp-max</sub> = ${D.uTxt("PT", pt.Umax)} kPa (quy tắc 30/10/2026: 2 chữ số có nghĩa, làm tròn lên; mẫu cũ in 0,080). PSHH-0522: ${ps.pass ? "Pass" : "Fail"}, chiều ${ps.dir}, in U = ${ps.Utext.text} kPa (Excel 0.24).</p>`;
   }
 
   /* ---------- navigation ---------- */
