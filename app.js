@@ -238,7 +238,8 @@
     return `<label class="f${opt.wide ? " wide" : ""}"><span>${label}</span>${ctl}</label>`;
   }
   function standOptions(kind) {
-    return [["", "— chọn —"]].concat(stands.filter(s => s.kind === kind).map(s => [s.id, `${s.key} · S/N ${s.serial}`]));
+    const today = todayISO();
+    return [["", "— chọn —"]].concat(stands.filter(s => s.kind === kind).map(s => [s.id, `${s.key} · S/N ${s.serial}${s.loc ? " · " + s.loc : ""}${s.due && s.due < today ? " · HẾT HẠN" : ""}`]));
   }
   function renderEntry() {
     const h = rec.h, PT = rec.type === "PT";
@@ -689,18 +690,19 @@
   }
 
   /* ---------- standards tab ---------- */
-  let editStand = null;
+  let editStand = null, standKind = "";
   const KINDS = { p: "Áp suất", e: "Điện (mA)", t: "Nhiệt độ", r: "Điện trở" };
   function renderStands() {
     const today = todayISO();
-    const row = s => `<div class="rec"><div><b>${esc(s.key)}</b> <span class="tag">${KINDS[s.kind] || s.kind}</span> <span class="${s.due && s.due >= today ? "ok" : "bad"}">${s.due && s.due >= today ? "Còn hạn " + s.due : "Hết hạn " + (s.due || "?")}</span><br>
-      <small class="mut">${esc(s.name)} · ${esc(s.maker)} ${esc(s.model)} · S/N ${esc(s.serial)} · (${s.min}÷${s.max}) ${esc(s.unit)} · U = ${s.unc} ${esc(s.uncUnit)}${s.rdg ? ` + ${s.rdg}%Rdg` : ""}</small></div>
+    const row = s => `<div class="rec"><div><b>${esc(s.key)}</b> <span class="tag">${KINDS[s.kind] || s.kind}</span>${s.loc ? ` <span class="tag loc">${esc(s.loc)}</span>` : ""} <span class="${s.due && s.due >= today ? "ok" : "bad"}">${s.due && s.due >= today ? "Còn hạn " + s.due : "Hết hạn " + (s.due || "?")}</span><br>
+      <small class="mut">${esc(s.name)} · ${esc(s.maker)} ${esc(s.model)} · S/N ${esc(s.serial)} · (${s.min}÷${s.max}) ${esc(s.unit)} · U = ${s.unc} ${esc(s.uncUnit)}${s.rdg ? (s.kind === "p" ? ` + ${s.rdg}%Rdg` : ` · sai số ${s.rdg} ${esc(s.unit)}`) : ""}${s.err && s.kind === "r" ? ` · sai số ${s.err} Ω` : ""}${s.cert ? ` · GCN ${esc(s.cert)}` : ""} · ${esc(s.trace || "")}</small>${s.note ? `<br><small class="${/CHỈ DÙNG|nghi|cần chốt/.test(s.note) ? "bad" : "mut"}">${esc(s.note)}</small>` : ""}</div>
       <div class="ra"><button class="btn sm" data-s="edit" data-id="${s.id}">Sửa</button></div></div>`;
     const form = editStand ? standForm(editStand) : "";
     $("#v-stands").innerHTML = `${form}<div class="card"><h2>Thư viện chuẩn</h2>
-      <p class="hint">Số liệu lấy từ sheet "Stand Ref" của PT_DGCP_10_2026.xls (chỉ các chuẩn còn hạn). Khi có giấy chứng nhận VMI mới, sửa ĐKĐBĐ và hạn hiệu chuẩn tại đây.</p>
+      <p class="hint">Cập nhật 30/10/2026 theo các giấy chứng nhận hiệu chuẩn mới (VMI, Unitek): U là giá trị lớn nhất trên GCN, kèm số GCN và ghi chú chỗ thay đổi. Nhãn "Cà Mau" = chuẩn có trong file Excel của Cà Mau (1.TT_LFS_CM_26, RTD_DK_CM_2026); sửa ô "Nơi đặt" nếu chuẩn đã chuyển chỗ. Khi có GCN mới, sửa U và hạn hiệu chuẩn tại đây.</p>
+      <div class="btns">${["", "p", "e", "t", "r"].map(k => `<button class="btn sm${standKind === k ? " pri" : ""}" data-s="kind" data-k="${k}">${k ? KINDS[k] : "Tất cả"}</button>`).join("")}</div>
       <div class="btns"><button class="btn pri" data-s="add">Thêm chuẩn</button><button class="btn" data-s="reset">Khôi phục danh sách gốc</button></div>
-      ${stands.map(row).join("")}</div>`;
+      ${stands.filter(s => !standKind || s.kind === standKind).map(row).join("")}</div>`;
   }
   function standForm(s) {
     const f = (lab, k, o = {}) => `<label class="f${o.wide ? " wide" : ""}"><span>${lab}</span>${o.options ? `<select data-k="${k}">${o.options.map(v => `<option${String(v) === String(s[k]) ? " selected" : ""}>${v}</option>`).join("")}</select>` : `<input data-k="${k}" value="${esc(s[k] == null ? "" : s[k])}" ${o.type ? `type="${o.type}"` : ""} ${o.num ? 'inputmode="decimal"' : ""}>`}</label>`;
@@ -710,15 +712,16 @@
       ${f("ĐKĐBĐ (U)", "unc", { num: 1 })}${f("Đơn vị của U", "uncUnit", { options: ["%", "ppm"].concat(PUNITS, ["mA", "°C", "Ω"]) })}${f("% of Reading", "rdg", { num: 1 })}
       ${s.kind === "e" ? f("Phạm vi in trên chứng chỉ (Max)", "certRange", { num: 1 }) : ""}
       ${s.kind === "e" || s.kind === "r" ? f("Sai số / phân giải (TT N17 · RTD O14)", "err", { num: 1 }) : ""}
-      ${s.kind === "t" ? f("Độ ổn định (°C)", "stab", { num: 1 }) + f("Đồng đều hướng kính – radial (°C)", "radial", { num: 1 }) + f("Đồng đều hướng trục – axial (°C)", "axial", { num: 1 }) + f("Tên thiết bị tạo nhiệt (QTG)", "heat") : ""}${f("Độ chính xác (text)", "accuracy")}${f("Dẫn xuất chuẩn", "trace")}${f("Hạn hiệu chuẩn", "due", { type: "date" })}
+      ${s.kind === "t" ? f("Độ ổn định (°C)", "stab", { num: 1 }) + f("Đồng đều hướng kính – radial (°C)", "radial", { num: 1 }) + f("Đồng đều hướng trục – axial (°C)", "axial", { num: 1 }) + f("Tên thiết bị tạo nhiệt (QTG)", "heat") : ""}${f("Độ chính xác (text)", "accuracy")}${f("Dẫn xuất chuẩn", "trace")}${f("Hạn hiệu chuẩn", "due", { type: "date" })}${f("Số giấy chứng nhận", "cert")}${f("Nơi đặt (vd. Cà Mau, Vũng Tàu)", "loc")}${f("Ghi chú", "note", { wide: 1 })}
       </div><div class="btns"><button class="btn pri" data-s="save">Lưu chuẩn</button><button class="btn" data-s="cancel">Huỷ</button>${s._new ? "" : `<button class="btn" data-s="delete">Xoá chuẩn</button>`}</div></div>`;
   }
   function onStandsClick(e) {
     const b = e.target.closest("button[data-s]"); if (!b) return;
     const a = b.dataset.s;
     if (a === "edit") { editStand = clone(standById(b.dataset.id)); renderStands(); window.scrollTo(0, 0); }
-    if (a === "add") { editStand = { _new: true, id: "s" + Date.now().toString(36), kind: "p", key: "", name: "", model: "", serial: "", maker: "", min: 0, max: 0, unit: "bar", unc: 0, uncUnit: "bar", rdg: 0, trace: "Viện ĐLVN (VMI)", due: "" }; renderStands(); }
+    if (a === "add") { editStand = { _new: true, id: "s" + Date.now().toString(36), kind: "p", key: "", name: "", model: "", serial: "", maker: "", min: 0, max: 0, unit: "bar", unc: 0, uncUnit: "bar", rdg: 0, trace: "Viện ĐLVN (VMI)", due: "", cert: "", loc: "", note: "" }; renderStands(); }
     if (a === "cancel") { editStand = null; renderStands(); }
+    if (a === "kind") { standKind = b.dataset.k; renderStands(); }
     if (a === "delete") { if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Xoá thật?"; return; } stands = stands.filter(s => s.id !== editStand.id); store.set("stands", stands); editStand = null; renderStands(); }
     if (a === "save") {
       $$("#sf [data-k]").forEach(i => { const k = i.dataset.k; editStand[k] = ["min", "max", "unc", "rdg", "certRange", "err", "stab", "radial", "axial"].includes(k) ? num(i.value) || 0 : i.value; });
@@ -771,7 +774,13 @@
     if (b.dataset.t === "selftest") $("#stout").innerHTML = selfTest();
   }
   function selfTest() {
-    const st = id => clone(SEED.stands.find(s => s.id === id));
+    // Chuẩn đóng băng đúng như sheet "Stand Ref" của file Excel 2026 dùng để đối chiếu (không lấy từ danh mục đang dùng, vì U đã cập nhật theo GCN mới)
+    const FROZEN = {
+      "700G05": { min: -1, max: 2, unit: "bar", unc: 0.0001, uncUnit: "bar", rdg: 0.05 },
+      "754 (66830024)": { min: 0, max: 30, unit: "mA", unc: 0.017, uncUnit: "%", rdg: 0 },
+      "APM30 (322077 - 30 bar)": { min: 0, max: 30, unit: "bar", unc: 0.002, uncUnit: "bar", rdg: 0 }
+    };
+    const st = id => clone(FROZEN[id]);
     // PT_DGCP_10_2026.xls › Data112 (CN.PT.26.2885) và PS_DGCP_10_2026.xls › Data133 (CN.PS.26.2744)
     const pt = C.calcPT({ min: 0, max: 100, unit: "kPa", acc: 0.25, points: [0, 25, 50, 75, 100], rise: [4.035, 8.03, 12.02, 16.006, 20.001], fall: [4.031, 8.013, 12.023, 16.019, 20.005], stand1: st("700G05"), stand2: st("754 (66830024)") });
     const expPT = [0.0539295692323056, 0.0491778103547832, 0.0532773550631725, 0.06456358905212, 0.0800524730260224];
