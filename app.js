@@ -924,11 +924,26 @@
       <div class="btns"><button class="btn sm${mineOnly ? "" : " pri"}" data-r="all">Tất cả</button><button class="btn sm${mineOnly ? " pri" : ""}" data-r="mine">Hồ sơ của tôi</button></div>
       <div class="btns"><button class="btn pri" data-r="qcPT">Bảng kiểm tra PT (QC)</button><button class="btn pri" data-r="qcPS">Bảng kiểm tra PS (QC)</button></div><div id="qcout"></div>
       <div class="btns"><button class="btn" data-r="csv">Xuất danh mục CSV</button><button class="btn" data-r="backup">Sao lưu JSON</button><label class="btn">Nhập JSON<input type="file" id="imp" accept=".json,application/json" hidden></label></div>
-      ${list.length ? list.map(r => `<div class="rec"><div><b>${esc(r.h.tag)}</b> <span class="tag">${r.type}</span> ${r.summary ? `<span class="${r.summary.pass ? "ok" : "bad"}">${r.summary.pass ? "Pass" : "Fail"}</span>` : ""} <span class="${r.approved ? "ok" : "mut"}">${r.approved ? "Đã duyệt" : "Chưa duyệt"}</span><br>
+      ${list.length ? folders(list, r => `<div class="rec"><div><b>${esc(r.h.tag)}</b> <span class="tag">${r.type}</span> ${r.summary ? `<span class="${r.summary.pass ? "ok" : "bad"}">${r.summary.pass ? "Pass" : "Fail"}</span>` : ""} <span class="${r.approved ? "ok" : "mut"}">${r.approved ? "Đã duyệt" : "Chưa duyệt"}</span><br>
         <small class="mut">${esc(r.certNo)} · ${esc(r.h.calDate)} · ${esc(r.h.locMode === "free" ? r.h.locFree : r.h.location)} · U=${esc(r.summary ? r.summary.U : "—")} · Người nhập: ${esc(r.owner ? r.owner.name : "—")}${(r.photos || []).some(x => x.has) ? ` · 📷 ${(r.photos || []).filter(x => x.has).length}` : ""}</small></div>
-        <div class="ra"><button class="btn sm" data-r="open" data-id="${r.id}">Mở</button><button class="btn sm" data-r="dup" data-id="${r.id}">Nhân bản</button>${A.can("deleteRecord") ? `<button class="btn sm" data-r="del" data-id="${r.id}">Xoá</button>` : ""}</div></div>`).join("") : `<p class="mut">Chưa có hồ sơ.</p>`}</div>`;
+        <div class="ra"><button class="btn sm" data-r="open" data-id="${r.id}">Mở</button><button class="btn sm" data-r="dup" data-id="${r.id}">Nhân bản</button>${A.can("deleteRecord") ? `<button class="btn sm" data-r="del" data-id="${r.id}">Xoá</button>` : ""}</div></div>`) : `<p class="mut">Chưa có hồ sơ.</p>`}</div>`;
     const imp = $("#imp"); if (imp) imp.onchange = importJson;
+    $$("details.fold").forEach(d => d.addEventListener("toggle", () => { if (d.open) openFolders.add(d.dataset.f); else openFolders.delete(d.dataset.f); }));
     const rq = $("#rq"); rq.oninput = () => { const pos = rq.selectionStart; renderRecords(); const n = $("#rq"); n.focus(); n.setSelectionRange(pos, pos); };
+  }
+  // Mỗi người nhập liệu một thư mục (yêu cầu NGOC 31/10/2026): tài khoản lưu hồ sơ chịu trách nhiệm hồ sơ trong thư mục mang tên mình.
+  // Thư mục của người đang đăng nhập đứng đầu và mở sẵn; hồ sơ cũ chưa có người nhập vào thư mục "Chưa rõ người nhập".
+  let openFolders = null;
+  const folderKey = r => r.owner ? r.owner.id || r.owner.name : "_none";
+  function folders(list, row) {
+    const m = A.me(), G = new Map();
+    list.forEach(r => { const k = folderKey(r); if (!G.has(k)) G.set(k, { name: r.owner ? r.owner.name : "Chưa rõ người nhập", items: [] }); G.get(k).items.push(r); });
+    const keys = [...G.keys()].sort((a, b) => (m && a === m.id ? -1 : m && b === m.id ? 1 : G.get(a).name.localeCompare(G.get(b).name, "vi")));
+    if (!openFolders) openFolders = new Set(m ? [m.id] : []);
+    return keys.map(k => { const f = G.get(k), n = f.items.length, ok = f.items.filter(r => r.approved).length;
+      return `<details class="fold" data-f="${esc(k)}"${openFolders.has(k) || keys.length === 1 ? " open" : ""}><summary>📁 <b>${esc(f.name)}</b>${m && k === m.id ? " <span class=\"tag\">của tôi</span>" : ""} <small class="mut">${n} hồ sơ · ${ok} đã duyệt</small></summary>
+        <div class="btns"><button class="btn sm" data-r="csvf" data-f="${esc(k)}">CSV thư mục này</button><button class="btn sm" data-r="backupf" data-f="${esc(k)}">Sao lưu JSON thư mục này</button></div>
+        ${f.items.map(row).join("")}</details>`; }).join("");
   }
   function onRecordsClick(e) {
     const b = e.target.closest("button[data-r]"); if (!b) return;
@@ -960,17 +975,20 @@
     }
     if (b.dataset.r === "share") { sharePdf(); return; }
     if (b.dataset.r === "download") { downloadPdf(); return; }
-    if (b.dataset.r === "backup") {
+    // backupf / csvf: chỉ hồ sơ trong thư mục của một người, tên file mang tên người đó
+    const fk = b.dataset.f, sel = fk ? records.filter(r => folderKey(r) === fk) : records;
+    const fname = fk ? "_" + ((sel[0] && sel[0].owner ? sel[0].owner.name : "ChuaRo").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").replace(/[^\w.-]+/g, "_")) : "";
+    if (b.dataset.r === "backup" || b.dataset.r === "backupf") {
       P.all().catch(() => ({})).then(all => {
-        const photos = {}; Object.keys(all).forEach(k => { if (records.some(r => k.startsWith(r.id + ":"))) photos[k] = all[k]; });
-        saveFile(new Blob([JSON.stringify({ app: "lab-pvgas-services", records, stands, settings, photos }, null, 1)], { type: "application/json" }), `LAB_PVGAS_backup_${todayISO()}.json`);
+        const photos = {}; Object.keys(all).forEach(k => { if (sel.some(r => k.startsWith(r.id + ":"))) photos[k] = all[k]; });
+        saveFile(new Blob([JSON.stringify({ app: "lab-pvgas-services", records: sel, stands, settings, photos }, null, 1)], { type: "application/json" }), `LAB_PVGAS_backup${fname}_${todayISO()}.json`);
       });
     }
-    if (b.dataset.r === "csv") {
+    if (b.dataset.r === "csv" || b.dataset.r === "csvf") {
       const head = ["Số chứng chỉ", "Loại", "Location", "Tag", "Mô tả", "Hãng", "Model", "Serial", "Min", "Max", "Đơn vị", "Pset", "Đơn vị Pset", "Độ chính xác", "Ngày HC", "U", "Kết quả", "Kiểm định viên", "Người kiểm soát", "Người nhập liệu", "Duyệt", "Số ảnh"];
-      const rows = records.map(r => [r.certNo, r.type, r.h.locMode === "free" ? r.h.locFree : r.h.location, r.h.tag, r.h.description, r.h.maker, r.h.model, r.h.serial, r.h.min, r.h.max, r.h.unit, r.type === "PS" ? r.h.pset : r.type === "TS" ? r.h.tset : "", r.type === "PS" ? r.h.unitPset : r.type === "TS" ? "°C" : "", r.h.acc, r.h.calDate, r.summary ? r.summary.U : "", r.summary ? (r.summary.pass ? "Đạt (Pass)" : "Không đạt (Fail)") : "", r.sig.inspector, r.sig.controller, r.owner ? r.owner.name : "", r.approved ? r.approved.by : "", (r.photos || []).filter(x => x.has).length]);
+      const rows = sel.map(r => [r.certNo, r.type, r.h.locMode === "free" ? r.h.locFree : r.h.location, r.h.tag, r.h.description, r.h.maker, r.h.model, r.h.serial, r.h.min, r.h.max, r.h.unit, r.type === "PS" ? r.h.pset : r.type === "TS" ? r.h.tset : "", r.type === "PS" ? r.h.unitPset : r.type === "TS" ? "°C" : "", r.h.acc, r.h.calDate, r.summary ? r.summary.U : "", r.summary ? (r.summary.pass ? "Đạt (Pass)" : "Không đạt (Fail)") : "", r.sig.inspector, r.sig.controller, r.owner ? r.owner.name : "", r.approved ? r.approved.by : "", (r.photos || []).filter(x => x.has).length]);
       const csv = "﻿" + [head].concat(rows).map(a => a.map(v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-      saveFile(new Blob([csv], { type: "text/csv" }), `DanhMuc_${todayISO()}.csv`);
+      saveFile(new Blob([csv], { type: "text/csv" }), `DanhMuc${fname}_${todayISO()}.csv`);
     }
   }
   async function saveFile(blob, name) {
