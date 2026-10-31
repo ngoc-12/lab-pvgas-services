@@ -1,9 +1,11 @@
-/* LAB PVGAS Services – calculation core, part 2 (PG, TS, TT, RTD, TG).
+/* LAB PVGAS Services – calculation core, part 2 (PG, TS, TT, RTD, TG, TC, DPG).
  * Ported from the 2026 company workbooks (macros by khainv@pvgas.com.vn); cell references kept in comments:
  *  - PG  : PG_08_Data_Rev2026_Oct-2026.xlsm  sheet Data08 (ĐLVN 08:2011 – verification, no uncertainty)
  *  - TS  : LFS_TS 09 2026.xls                sheet DLVNTM13 + DataTM13 (DVK.LAB.TM.13)
  *  - TT  : 1.TT_LFS_CM_26.xls                sheet DLVN188.2-2 + "STDEV calc" + Data188 (DVK.LAB.TM.12)
  *  - RTD : RTD_DK_CM_2026_.xls               sheet "DLVN125 NK chuan + do Ohm" + Data125 (ĐLVN 125:2003)
+ *  - TC  : TC_GPP_2026_.xlsm                sheet DLVN161 + Ref + Data161 (ĐLVN 161:2005) – checked against the 66 GPP 2026 records
+ *  - DPG : DVK_ĐVT_PG GPP_2026_KNV.xls        sheet DLVN76_2001 + Data76 (ĐLVN 76:2001) – checked against the 8 PDI GPP 2026 records
  *  - TG  : TG_GPP 08-2026_Phuoc_.xlsm        sheet DLVN138.2-1 + "STDEV Calc" + Data138 (ĐLVN 138:2004) – checked against the 45 GPP 08/2026 records
  * The workbooks were supplied as samples (2026-10-30): logic is ported, numbers are not yet cross-checked.
  */
@@ -227,7 +229,112 @@
     return { type: "TG", k, n, F7, res, cls, nL, nM, nH, pt, ubk3, R, lines, maxSHC, lim, pass, Umax, lowSingle: nL === 1 };
   }
 
-  const api = { calcPG, calcTS, calcTT, calcRTD, calcTG, pt100, polyfit };
+  /* ---------------- TC – ĐLVN 161:2005 (DLVN161 + Ref + Data161) ---------------- */
+  // ITS-90 reference functions (sheet Ref). J: E(t) −210…760 / 760…1200; K: E(t) −270…0 / 0…1372 (+ α0·e^(α1(t−126.9686)²))
+  const ITS = {
+    J: { e1: [0, 0.050381187815, 3.047583693e-05, -8.568106572e-08, 1.3228195295e-10, -1.7052958337e-13, 2.0948090697e-16, -1.2538395336e-19, 1.5631725697e-23, 0, 0], a1: [0, 0, 0],
+         e2: [296.45625681, -1.4976127786, 0.0031787103924, -3.1847686701e-06, 1.5720819004e-09, -3.0691369056e-13, 0, 0, 0, 0, 0], a2: [0, 0, 0], split: 760,
+         t1: [0, 19.528268, -1.2286185, -1.0752178, -0.59086933, -0.17256713, -0.028131513, -0.002396337, -8.3823321e-05, 0],
+         t2: [0, 19.78425, -0.2001204, 0.01036969, -0.0002549687, 3.585153e-06, -5.344285e-08, 5.09989e-10, 0, 0],
+         r1: "Từ -210 đến 760", r2: "Từ 760 đến 1200", sens: 0.053 },
+    K: { e1: [0, 0.039450128025, 2.3622373598e-05, -3.2858906784e-07, -4.9904828777e-09, -6.7509059173e-11, -5.7410327428e-13, -3.1088872894e-15, -1.0451609365e-17, -1.9889266878e-20, -1.6322697486e-23], a1: [0, 0, 0],
+         e2: [-0.0176004137, 0.038921204975000005, 1.8558770032e-05, -9.9457592874e-08, 3.1840945718999995e-10, -5.6072844889e-13, 5.607505905900001e-16, -3.2020720002999997e-19, 9.715114715200001e-23, -1.2104721275000003e-26, 0],
+         a2: [0.1185976, -0.0001183432, 126.9686], split: 0,
+         t1: [0, 25.173462, -1.1662878, -1.0833638, -0.8977354, -0.37342377, -0.086632643, -0.010450598, -0.00051920577, 0],
+         t2: [0, 25.08355, 0.07860106, -0.2503131, 0.0831527, -0.01228034, 0.0009804036, -4.41303e-05, 1.057734e-06, -1.052755e-08],
+         r1: "Từ -270 đến 0", r2: "Từ 0 đến 1372", sens: 0.041 }
+  };
+  const poly = (c, x) => c.reduce((s, v, i) => s + v * x ** i, 0);
+  const eIts = (R, t, a, c) => poly(c, t) + a[0] * Math.exp(a[1] * (t - a[2]) ** 2);
+  // I62: J uses range 1 when t < 760, K uses range 1 when t ≤ 0
+  function emf(type, t) { const R = ITS[type]; const lo = type === "J" ? t < R.split : t <= R.split; return lo ? eIts(R, t, R.a1, R.e1) : eIts(R, t, R.a2, R.e2); }
+  // T38: the ΔE regression always uses the type K table (Ref!D21:E34), whatever the DUT type – kept as in the workbook
+  const emfK = t => t < 0 ? eIts(ITS.K, t, ITS.K.a1, ITS.K.e1) : eIts(ITS.K, t, ITS.K.a2, ITS.K.e2);
+  function calcTC(inp) {
+    const { type = "J", max, min = 0, acc, k = 2 } = inp;
+    const R = ITS[type]; if (!R) throw new Error("Chỉ có hệ số cho cặp nhiệt loại J và K");
+    const N = 8, n = 5;                                                   // F22, F23
+    const S = R.sens;                                                     // F9 (Ref!C37:C38)
+    const P = inp.pts.map(p => ({ std: p.std.map(Number), dut: p.dut.map(Number) }));
+    const stdev6 = a => stdev(a.concat([mean(a)]));                       // F34 = STDEV(F28:F33) – the average row is inside the range
+    const pt = P.map(p => {
+      const t = mean(p.std), E = mean(p.dut), Eref = emf(type, t), dE = E - Eref;
+      const lab = Math.round(t);                                          // E62
+      const m = Math.abs(dE);
+      // O62: |ΔE| through the inverse table; E62 < 0 uses range 1 where Ref!$JH$37 (blank) drops C1
+      const c = lab < 0 ? R.t1.map((v, i) => i === 1 ? 0 : v) : R.t2;
+      const dT = dE < 0 ? -poly(c, m) : poly(c, m);
+      return { t, E, Eref, dE, dT, tDut: t + dT, sStd: stdev6(p.std), sDut: stdev(p.dut), V: E - emfK(t) };
+    });
+    const sq = v => (v || 0) ** 2;
+    const s1 = inp.s1 || {}, s2 = inp.s2 || {}, h1 = inp.h1 || s1, h2 = inp.h2 || s2, mv = inp.mv || {};
+    const Ultb = Math.sqrt((sq(pt[0] && pt[0].sStd) + sq(pt[2] && pt[2].sStd) + sq(pt[4] && pt[4].sStd) + sq(pt[6] && pt[6].sStd)) / N);   // F35: points 1,3,5,7 only
+    const uch9 = Ultb / Math.sqrt(n);
+    const uch7 = (inp.uCJ || 0) / k;                                      // F37 = M20/F24 (Fluke 1620A, đầu tự do)
+    const uch8 = max <= 140 ? uHeat(h1) : uHeat(h2);                      // F38 (Max ≤ 140: heat source 1, else 2)
+    const uch11 = 0;                                                      // F40 (BlackStack/SPRT readout only)
+    const uch1 = (max >= 155 ? s2.unc : s1.unc) / k;                      // F41
+    const uch = Math.sqrt(sq(uch9) + sq(uch7) + sq(uch8) + sq(uch11) + sq(uch1));
+    const UltbD = Math.sqrt((sq(pt[0] && pt[0].sDut) + sq(pt[2] && pt[2].sDut) + sq(pt[4] && pt[4].sDut) + sq(pt[6] && pt[6].sDut)) / N);   // F51
+    const ubk6 = UltbD / Math.sqrt(n);
+    const ubk1 = ((mv.unc || 0) * pt[pt.length - 1].E / 100) / (k * S);   // F53 = (M15·M49/100)/(F24·F9) – mV meter U in %, at point 8
+    const ubk2 = 0.5 * (inp.mvRes || 0.001) / (S3 * S);                   // F54
+    // S38:Y59 – least squares ΔE = a0 + a1·t + a2·t² with ΔE = E_DUT − E_K(t)
+    const q = polyfit(pt.map(p => p.t), pt.map(p => p.V), 2);
+    const res2 = pt.reduce((s, p) => s + (p.V - (q[0] + q[1] * p.t + q[2] * p.t ** 2)) ** 2, 0);
+    const ubk7 = Math.sqrt(res2 / (5 * S));                               // F55 = SQRT(ΣY/(5·F9))
+    const ubk8 = max / 100 * 0.1;                                         // M55 (BoA 2022: 0,1 % of Max)
+    const uDUT = Math.sqrt(sq(ubk6) + sq(ubk1) + sq(ubk2) + sq(ubk7) + sq(ubk8));
+    const uc = Math.sqrt(uch ** 2 + uDUT ** 2), U = 2 * uc;              // F57, F58
+    const maxErr = Math.max(...pt.map(p => Math.abs(p.dT)));
+    const lim = acc * (max - min) / 100;
+    const pass = !(U + maxErr > lim);                                     // Data161!HE
+    return { type: "TC", tcType: type, S, pt, a: q, Ultb, uch9, uch7, uch8, uch11, uch1, uch, UltbD, ubk6, ubk1, ubk2, ubk7, ubk8, uDUT, uc, U, Utext: tcUText(U), maxErr, lim, pass, its: R };
+  }
+  // F59: decimals from the digit count of ROUND(frac,4)·10⁴; adds a half step before rounding (≈ round up)
+  function tcUText(U) {
+    if (!U) return "0";
+    const f = Number((xr(U - Math.floor(U), 4) * 1e4).toPrecision(15)), L = String(f).length;
+    if (L === 4) return xr(U + 0.005, 2).toFixed(2);
+    if (L === 3) return xr(U + 0.0005, 3).toFixed(3);
+    if (L === 2) return xr(U + 0.00005, 4).toFixed(4);
+    return "0";
+  }
+
+  /* ---------------- DPG / PDI – ĐLVN 76:2001 (DLVN76_2001 + Data76), "hiệu chỉnh P" = Yes ---------------- */
+  function calcDPG(inp) {
+    const { min: mn, max: mx, unit, acc, k = 2 } = inp;
+    const s1 = inp.stand1, span = mx - mn;
+    const xs = inp.std.map(Number), rise = inp.rise.map(Number), fall = inp.fall.map(Number), m = xs.length;
+    const f = C.factor(s1.unit, unit);
+    const E9 = s1.min * f, E10 = s1.max * f, E11 = s1.uncUnit === "%" ? s1.unc : s1.unc * f;   // E9:E11 (stand in the DUT unit)
+    const E12 = s1.uncUnit === "%" ? s1.unc : E11 / (E10 - E9) * 100;                        // ĐKĐBĐ quy đổi (%)
+    const E13 = s1.rdg || 0;                                                                // Stand!"Sai số" used as % of reading
+    const X = xs.concat(xs), Y = rise.concat(fall);                                         // E20:N20 / E21:N21
+    const { a, b } = C.linest(Y, X);                                                        // F27, F26
+    const Sy = C.steyx(Y, X);                                                               // F31
+    const K32 = X.reduce((s, v, i, A) => s + (v - A.reduce((t, w) => t + w, 0) / A.length) ** 2, 0);
+    const L32 = X.reduce((s, v) => s + v * v, 0), M32 = X.length, N32 = X.reduce((s, v) => s + v, 0);
+    const Sa = Sy * Math.sqrt(L32 / M32 / K32), Sb = Sy * Math.sqrt(1 / K32), r = -N32 / Math.sqrt(M32 * L32);   // F32:F34
+    const uv = ((inp.res || 0) * 100 / span) / Math.sqrt(6) / 2;                           // F37 (%)
+    const cols = X.map(x => {
+      const uA = Math.sqrt(Math.max(0, Sa * Sa + x * x * Sb * Sb + 2 * x * Sa * Sb * r));  // row 22 – in the DUT unit
+      const us = s1.deadweight ? (E12 * Math.abs(x)) / (2 * span) : (E12 * (E10 - E9) + E13 * Math.abs(x)) / (2 * span);   // row 36 (%)
+      return { x, uA, us, uc: Math.sqrt(uA * uA + us * us + uv * uv) };                    // row 23: uA added to the % terms as in the sheet
+    });
+    const rows = xs.map((x, i) => {
+      const ucAvg = (cols[i].uc + cols[i + m].uc) / 2;                                      // I44 = ½(E23 + J23)
+      const Upct = ucAvg * k, U = Upct * span / 100;                                        // K44, J44
+      return { x, rise: rise[i], fall: fall[i], cR: x - rise[i], cF: x - fall[i], ucAvg, Upct, U: s1.deadweight ? Upct : U };   // Data76 CD: deadweight prints %
+    });
+    const Umax = Math.max(...rows.map(q => q.U));                                           // Data76!CR
+    const maxSHC = Math.max(...rows.map(q => Math.max(Math.abs(q.cR), Math.abs(q.cF))));
+    const lim = acc * span / 100;                                                           // IA
+    const pass = !(Umax + maxSHC > lim);                                                    // HX: CR + max|SHC| > IA → Fail
+    return { type: "DPG", a, b, Sy, Sa, Sb, r, uv, E9, E10, E11, E12, E13, cols, rows, Umax, Utext: tcUText(Umax), maxSHC, lim, pass, k, n: M32 };
+  }
+
+  const api = { calcPG, calcDPG, calcTS, calcTT, calcRTD, calcTG, calcTC, tcEmf: emf, ITS, pt100, polyfit };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.LabCalc2 = api;
 })(typeof self !== "undefined" ? self : this);

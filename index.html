@@ -89,6 +89,7 @@ table.entry input{font-family:var(--f-num);text-align:center;padding:9px 4px}
 table.entry.tt{min-width:500px}table.entry.tt td.n{width:auto}table.entry.tt td.n .pm{min-width:86px}
 table.entry.tt tr.sep td{border-bottom:1px solid var(--line,#ddd);padding-bottom:6px}
 .xs{overflow-x:auto}table.entry.rtd{min-width:520px}table.entry.rtd td.n{width:44px;font-size:12px}table.entry.rtd input{padding:9px 2px}
+table.entry.tcx{min-width:600px}table.entry.tcx td.nm{width:auto}table.entry.tcx td.nm .pm{min-width:84px}table.entry.tcx tr.sep td{border-bottom:1px solid var(--line,#ddd);padding-bottom:6px}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .btn{border:1px solid var(--line);background:var(--sunk);color:var(--ink);border-radius:10px;padding:10px 13px;font:500 14px var(--f-ui);cursor:pointer}
 .btn.pri{background:var(--clay);border-color:var(--clay);color:var(--clay-ink)}
@@ -159,6 +160,7 @@ section.a4>*{position:relative;z-index:1}
 .a4 table.csig td{width:50%;vertical-align:top;padding:0}
 .a4 table.csig tr.sp td{height:92px;vertical-align:middle;text-align:left}
 .a4 table.csig.two tr.sp td{height:100px}
+.a4 table.csig.two.tcs tr.sp td{height:44px}
 .a4 .accr{width:136px;margin-left:28px}
 .a4 table.cftr{position:absolute;left:34px;right:34px;bottom:34px;border-collapse:collapse;font-size:11px;line-height:1.25;width:auto}
 .a4 table.cftr td{border-top:1px solid #000;padding:4px 6px;vertical-align:top}
@@ -172,6 +174,9 @@ section.a4>*{position:relative;z-index:1}
 .a4 .box{border:1px solid #000;border-top:0;padding:4px 8px;font-size:14px}
 .a4 .box p{margin:2px 0}
 .a4 .box .l{display:block;text-align:left}
+.a4 table.cres.tcr td{padding:1px 3px;height:15px}
+.a4 .box.tcb{font-size:13px}
+.a4 .box.tcb p{margin:1px 0}
 .a4 ul.dash{margin:1px 0;padding-left:44px;list-style:none}
 .a4 ul.dash li{position:relative}
 .a4 ul.dash li::before{content:"-";position:absolute;left:-22px}
@@ -250,6 +255,11 @@ section.a4>*{position:relative;z-index:1}
 .a4 table.ckv.tc td{padding:1px 0 2px}
 .a4 table.coef{margin:0 0 0 210px;border-collapse:collapse}
 .a4 table.coef td{padding:0 0 1px}
+.a4 table.coef.tcc{margin:2px auto 4px;width:92%}
+.a4 table.coef.tcc th{font-weight:normal;padding:0 0 2px;text-align:center}
+.a4 table.coef.tcc td{padding:0 6px 1px 0;white-space:nowrap}
+.a4 table.coef.tcc td:nth-child(odd){width:7%}
+.a4 table.coef.tcc td:nth-child(4){padding-right:24px}
 .a4 table.tsr td{height:22px}
 /* ---- QTG for PG / TS / TT / RTD ---- */
 .a4.qtg.pgqtg table.dot{font-size:13px}
