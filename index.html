@@ -114,7 +114,7 @@ details{margin-top:10px} summary{cursor:pointer;color:var(--clay);font-weight:60
 .pdfready{background:var(--result);border-radius:12px;padding:12px;margin-top:12px;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
 .pv{overflow:hidden;position:relative;background:var(--sunk);border-radius:10px}
 .pv-in{transform-origin:0 0;width:794px}
-nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs button{height:var(--tabbar-h);border:0;background:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:500 11px var(--f-ui);cursor:pointer}
 nav.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
 nav.tabs button.on{color:var(--clay)}
@@ -283,6 +283,13 @@ section.a4>*{position:relative;z-index:1}
   .pv{height:auto!important;overflow:visible}.pv-in{transform:none!important}
   section.a4{margin:0;page-break-after:always}
 }
+.fnav{margin:6px 0 4px}.fchip{min-width:58px;padding:8px 10px}
+.fsec{border-top:1px solid var(--line);padding:4px 0}.fsec>summary{cursor:pointer;padding:10px 0;line-height:1.35}
+.fsec h4{margin:12px 0 4px;font-size:14px}.fsec p,.fsec li{font-size:14px;line-height:1.45}
+.fx{margin:6px 0;padding:8px 10px;border-left:3px solid var(--clay,#c96442);background:var(--card2,rgba(127,127,127,.08));border-radius:6px}
+.fm{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:15.5px;line-height:1.5;overflow-wrap:anywhere}
+.fr{font-size:12px;opacity:.7;margin-top:2px}
+.fdiff{margin:10px 0 6px;padding:8px 10px;border:1px dashed #c9a227;border-radius:6px;font-size:13.5px}.fdiff ul{margin:4px 0 0 18px;padding:0}
 </style>
 </head>
 <body>
@@ -291,12 +298,14 @@ section.a4>*{position:relative;z-index:1}
   <section id="v-entry"></section>
   <section id="v-records" hidden></section>
   <section id="v-stands" hidden></section>
+  <section id="v-formulas" hidden></section>
   <section id="v-settings" hidden></section>
 </main>
 <nav class="tabs">
   <button data-v="entry" class="on"><svg viewBox="0 0 24 24"><path d="M4 20h16M6 16l9.5-9.5 3 3L9 19H6z"/></svg>Nhập liệu</button>
   <button data-v="records"><svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z M14 4v5h5 M8 13h8 M8 17h6"/></svg>Hồ sơ</button>
   <button data-v="stands"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 13l3-3 M12 3v3"/></svg>Chuẩn</button>
+  <button data-v="formulas"><svg viewBox="0 0 24 24"><path d="M4 5h9M4 5l6 7-6 7h9 M15 9l5 6 M20 9l-5 6"/></svg>Công thức</button>
   <button data-v="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Cài đặt</button>
 </nav>
 <div id="toast" class="toast"></div>
@@ -310,6 +319,7 @@ section.a4>*{position:relative;z-index:1}
 <script src="docs2.js"></script>
 <script src="auth.js"></script>
 <script src="photos.js"></script>
+<script src="formulas.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
