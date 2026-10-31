@@ -1123,7 +1123,8 @@
     const el = $("#v-formulas"); el.innerHTML = window.LabFormulas.render();
     el.onclick = e => { const b = e.target.closest("[data-fj]"); if (!b) return; const d = $("#f-" + b.dataset.fj); d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); };
   }
-  const VIEWS = { entry: renderEntry, records: renderRecords, stands: renderStands, formulas: renderFormulas, settings: renderSettings };
+  function renderRefs() { const m = A.me(); $("#v-refs").innerHTML = window.LabRefs.render(settings, m ? m.role : 0); }
+  const VIEWS = { entry: renderEntry, records: renderRecords, stands: renderStands, formulas: renderFormulas, refs: renderRefs, settings: renderSettings };
   function go(v) {
     $$("main > section").forEach(s => s.hidden = s.id !== "v-" + v);
     $$("nav.tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === v));

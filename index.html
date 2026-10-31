@@ -114,7 +114,7 @@ details{margin-top:10px} summary{cursor:pointer;color:var(--clay);font-weight:60
 .pdfready{background:var(--result);border-radius:12px;padding:12px;margin-top:12px;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
 .pv{overflow:hidden;position:relative;background:var(--sunk);border-radius:10px}
 .pv-in{transform-origin:0 0;width:794px}
-nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(6,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs button{height:var(--tabbar-h);border:0;background:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:500 11px var(--f-ui);cursor:pointer}
 nav.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
 nav.tabs button.on{color:var(--clay)}
@@ -284,6 +284,23 @@ section.a4>*{position:relative;z-index:1}
   section.a4{margin:0;page-break-after:always}
 }
 .fnav{margin:6px 0 4px}.fchip{min-width:58px;padding:8px 10px}
+.rhero{border-color:var(--clay);background:linear-gradient(180deg,var(--result),var(--surface))}
+.rtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.rtop img{height:52px;border-radius:6px;background:#fff}
+.rhero p{margin:0 0 12px;line-height:1.5}
+.rbadge{display:inline-block;font:600 12px var(--f-ui);color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);border-radius:20px;padding:3px 10px;margin-bottom:8px}
+.rstats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.rstats div{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:8px;text-align:center}
+.rstats b{display:block;font:600 22px var(--f-head);color:var(--clay)}.rstats span{font-size:11px;color:var(--muted)}
+.rrow{border-top:1px solid var(--line);padding:10px 0}.rtype{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px}
+.rt{background:var(--clay);color:var(--clay-ink);border-radius:7px;font:600 12px var(--f-ui);padding:3px 0;min-width:40px;text-align:center}.rt.sm{background:var(--sunk);color:var(--muted)}
+.rdoc{background:var(--sunk);border-radius:11px;padding:9px 11px;margin:6px 0;font-size:14px;line-height:1.4}
+.rhead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.rpill{font:600 11px var(--f-ui);border-radius:20px;padding:2px 8px;white-space:nowrap}
+.rpill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.rpill.int{color:var(--clay);background:var(--clay-soft)}.rpill.chk{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.rnote{font-size:12px;margin-top:3px}.rgcn{font-size:12px;margin-top:2px}
+.rlinks{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px}.rlinks.col{flex-direction:column}
+.rlink{color:var(--clay);font-size:13px;text-decoration:none;font-weight:500}
+.ropen{margin:0;padding-left:18px;font-size:13px;line-height:1.5}
 .fsec{border-top:1px solid var(--line);padding:4px 0}.fsec>summary{cursor:pointer;padding:10px 0;line-height:1.35}
 .fsec h4{margin:12px 0 4px;font-size:14px}.fsec p,.fsec li{font-size:14px;line-height:1.45}
 .fx{margin:6px 0;padding:8px 10px;border-left:3px solid var(--clay,#c96442);background:var(--card2,rgba(127,127,127,.08));border-radius:6px}
@@ -300,6 +317,7 @@ section.a4>*{position:relative;z-index:1}
   <section id="v-records" hidden></section>
   <section id="v-stands" hidden></section>
   <section id="v-formulas" hidden></section>
+  <section id="v-refs" hidden></section>
   <section id="v-settings" hidden></section>
 </main>
 <nav class="tabs">
@@ -307,6 +325,7 @@ section.a4>*{position:relative;z-index:1}
   <button data-v="records"><svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z M14 4v5h5 M8 13h8 M8 17h6"/></svg>Hồ sơ</button>
   <button data-v="stands"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 13l3-3 M12 3v3"/></svg>Chuẩn</button>
   <button data-v="formulas"><svg viewBox="0 0 24 24"><path d="M4 5h9M4 5l6 7-6 7h9 M15 9l5 6 M20 9l-5 6"/></svg>Công thức</button>
+  <button data-v="refs"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z M8.5 12l2.5 2.5 4.5-5"/></svg>Căn cứ</button>
   <button data-v="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Cài đặt</button>
 </nav>
 <div id="toast" class="toast"></div>
@@ -322,6 +341,7 @@ section.a4>*{position:relative;z-index:1}
 <script src="photos.js"></script>
 <script src="vendor/temml.min.js"></script>
 <script src="formulas.js"></script>
+<script src="refs.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
