@@ -1125,6 +1125,12 @@
     $("#v-settings").addEventListener("change", onSettingsInput);
     $("#v-settings").addEventListener("click", onSettingsClick);
     A.start(m => { if (!rec.saved) { rec.owner = { id: m.id, name: m.name }; rec.sig.inspector = m.name; } go("entry"); });   // an unsaved draft belongs to whoever is logged in   // nothing renders before PIN login
-    if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => { });
+    // New version: check sw.js on every open, and reload once when the new worker takes over (unsaved drafts are kept in lab.current)
+    if ("serviceWorker" in navigator && location.protocol === "https:") {
+      const had = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(r => r.update()).catch(() => { });
+      let done = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => { if (had && !done) { done = true; store.set("current", rec); location.reload(); } });
+    }
   });
 })();

@@ -1,4 +1,4 @@
-const CACHE = "lab-pvgas-v14";
+const CACHE = "lab-pvgas-v15";
 const FILES = ["./", "./index.html", "./app.js", "./auth.js", "./photos.js", "./calc.js", "./calc2.js", "./data.js", "./docs.js", "./docs2.js", "./manifest.webmanifest",
   "./vendor/html2canvas.min.js", "./vendor/jspdf.umd.min.js", "./assets/logo.jpg", "./assets/logo2026.jpg", "./assets/vilas.jpg", "./assets/wm.jpg", "./assets/wm_pg.jpg", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
@@ -6,6 +6,7 @@ self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Pr
 // Network first so updates arrive when online; cache when offline at site.
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
-  e.respondWith(fetch(e.request).then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r; })
+  // cache: "no-cache" revalidates with the server, so the 10-minute GitHub Pages HTTP cache cannot hold back an update
+  e.respondWith(fetch(e.request, { cache: "no-cache" }).then(r => { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return r; })
     .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match("./index.html"))));
 });
